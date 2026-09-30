@@ -16,11 +16,25 @@
     .toast-enter-active { transform: translateX(0); opacity: 1; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
     .toast-exit { transform: translateX(100%); opacity: 0; transition: all 0.3s ease-in; }
     
-    /* Checkbox personalizzata nei task card */
     .task-checkbox:checked { background-color: #22c55e !important; border-color: #22c55e !important; }
   </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 antialiased h-screen flex flex-col overflow-hidden relative">
+
+  <!-- SCHERMATA DI ACCESSO (LOGIN PROFILI) -->
+  <div id="login-overlay" class="fixed inset-0 bg-slate-900 z-[200] flex flex-col items-center justify-center p-4 transition-opacity duration-300">
+    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md text-center flex flex-col max-h-[90vh]">
+      <div class="bg-blue-600 text-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-lg flex-shrink-0">
+        <i class="fa-solid fa-compass-drafting"></i>
+      </div>
+      <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-1">INTEGRA PROGETTI</h2>
+      <p class="text-xs sm:text-sm text-slate-500 mb-6 flex-shrink-0">Seleziona il tuo profilo per accedere al Cloud</p>
+      
+      <div id="login-collaborators-list" class="flex-1 overflow-y-auto custom-scrollbar space-y-3 px-1 pb-2">
+        <div class="text-sm text-slate-400 animate-pulse py-4">Connessione al database in corso...</div>
+      </div>
+    </div>
+  </div>
 
   <!-- Contenitore Notifiche Pop-up -->
   <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 w-72 sm:w-80"></div>
@@ -34,14 +48,16 @@
       </div>
       <div>
         <h1 class="font-bold text-sm sm:text-lg leading-tight">INTEGRA PROGETTI</h1>
-        <p class="text-[10px] sm:text-xs text-slate-400 hidden sm:block">Database Cloud Condiviso - Sincronizzazione Attiva <i class="fa-solid fa-cloud-arrow-up ml-1 text-green-400"></i></p>
+        <p class="text-[10px] sm:text-xs text-slate-400 hidden sm:block">Database Cloud Condiviso - <span id="currentUserDisplay">Accesso in corso...</span></p>
       </div>
     </div>
     <div class="flex items-center space-x-1 sm:space-x-2">
       <button onclick="toggleMobileSidebar()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 sm:hidden rounded-lg text-xs font-semibold flex items-center gap-1" title="Filtri Team"><i class="fa-solid fa-users-gear"></i></button>
       <button onclick="openCollaboratorsManageModal()" class="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition items-center gap-1.5"><i class="fa-solid fa-user-gear"></i> Team</button>
       <button onclick="openCategoriesManageModal()" class="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition items-center gap-1.5"><i class="fa-solid fa-list-check"></i> Tipologie</button>
-      <button onclick="openTaskModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-semibold transition shadow flex items-center gap-1.5 sm:gap-2 ml-1"><i class="fa-solid fa-plus"></i> <span class="hidden xs:inline">Nuovo</span> Lavoro</button>
+      <button onclick="openTaskModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-semibold transition shadow flex items-center gap-1.5 sm:gap-2 ml-1"><i class="fa-solid fa-plus"></i> <span class="hidden xs:inline">Nuovo</span></button>
+      <!-- Pulsante Cambio Utente / Esci -->
+      <button onclick="logoutUser()" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-semibold transition shadow flex items-center gap-1.5 ml-1" title="Cambia Utente"><i class="fa-solid fa-right-from-bracket"></i> <span class="hidden sm:inline">Esci</span></button>
     </div>
   </header>
 
@@ -239,8 +255,11 @@
     window.tasks = [];
     window.activeCollaboratorFilters = [];
     window.currentDate = new Date();
-    window.currentView = 'month'; // 'month', 'week', 'day'
+    window.currentView = 'month'; 
     window.shownReminders = new Set();
+    
+    // Variabile per tenere traccia dell'utente loggato
+    window.currentUserId = localStorage.getItem('integra_current_user') || null;
 
     signInAnonymously(auth).then(() => {
       initAppListeners();
@@ -263,6 +282,8 @@
           const wasEmpty = window.collaborators.length === 0;
           window.collaborators = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
           if (wasEmpty) window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
+          
+          window.renderLoginScreen(); // Rende i bottoni per il login
           window.renderCollaboratorsList();
           window.renderManageCollaboratorsList();
           window.renderCalendar();
@@ -292,6 +313,61 @@
       });
     }
 
+    // --- GESTIONE LOGIN PROFILI ---
+    window.renderLoginScreen = function() {
+      const loginOverlay = document.getElementById('login-overlay');
+      const container = document.getElementById('login-collaborators-list');
+      
+      container.innerHTML = window.collaborators.map(c => `
+        <button onclick="selectUser('${c.id}')" class="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition shadow-sm w-full text-left bg-white" style="border-left: 5px solid ${c.bg}">
+          <div>
+            <div class="font-bold text-slate-800 text-sm sm:text-base">${c.name}</div>
+            <div class="text-xs text-slate-500">${c.role}</div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-slate-300 mr-2"></i>
+        </button>
+      `).join('');
+
+      // Se l'utente è già loggato e presente nel db, nascondi l'overlay
+      if (window.currentUserId) {
+        const userExists = window.collaborators.find(c => c.id === window.currentUserId);
+        if (userExists) {
+          loginOverlay.classList.add('opacity-0', 'pointer-events-none');
+          setTimeout(() => loginOverlay.classList.add('hidden'), 300);
+          document.getElementById('currentUserDisplay').textContent = "Accesso come: " + userExists.name;
+        } else {
+          window.logoutUser(); // Profilo eliminato, forza il logout
+        }
+      }
+    }
+
+    window.selectUser = function(id) {
+      window.currentUserId = id;
+      localStorage.setItem('integra_current_user', id);
+      
+      const user = window.collaborators.find(c => c.id === id);
+      document.getElementById('currentUserDisplay').textContent = "Accesso come: " + user.name;
+      
+      const loginOverlay = document.getElementById('login-overlay');
+      loginOverlay.classList.add('opacity-0', 'pointer-events-none');
+      setTimeout(() => loginOverlay.classList.add('hidden'), 300);
+      
+      // Imposta i filtri per vedere tutti
+      window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
+      window.renderCollaboratorsList();
+      window.renderCalendar();
+    }
+
+    window.logoutUser = function() {
+      window.currentUserId = null;
+      localStorage.removeItem('integra_current_user');
+      document.getElementById('currentUserDisplay').textContent = "Accesso in corso...";
+      
+      const loginOverlay = document.getElementById('login-overlay');
+      loginOverlay.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+    }
+    // --------------------------------
+
     window.toggleMobileSidebar = function() {
       const sb = document.getElementById('sidebarFilters');
       sb.classList.toggle('-translate-x-full');
@@ -313,6 +389,8 @@
     }
 
     window.checkReminders = function() {
+      if(!window.currentUserId) return; // Controlla promemoria solo se loggato
+      
       const today = new Date().toISOString().split('T')[0];
       const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
       const tmrwStr = tmrw.toISOString().split('T')[0];
@@ -495,7 +573,6 @@
         const dayTasks = window.tasks.filter(t => {
           let effectiveEndDate = t.endDate;
           
-          // NUOVA LOGICA: usiamo la completionDate se esiste, altrimenti se in ritardo slitta a oggi.
           if (t.completed && t.completionDate && t.completionDate > t.endDate) {
              effectiveEndDate = t.completionDate;
           } else if (!t.completed && todayStr > t.endDate) {
@@ -506,14 +583,12 @@
                  (t.title.toLowerCase().includes(searchQuery) || (t.notes && t.notes.toLowerCase().includes(searchQuery)));
         });
 
-        // Mostra le non completate in alto, le completate in basso
         dayTasks.sort((a, b) => (a.completed === b.completed) ? 0 : a.completed ? 1 : -1);
 
         dayTasks.forEach(t => {
           const collab = window.collaborators.find(c => c.id === t.assigneeId) || { name: 'N/A', bg: '#64748b', text: '#fff' };
           const hasReminderIcon = t.reminder && t.reminder !== 'none' ? '<i class="fa-solid fa-bell text-[8px] opacity-70"></i> ' : '';
           
-          // L'allarme rosso si attiva SOLO se l'attività NON è completata e la data originale (endDate) è superata.
           const isOverdue = !t.completed && todayStr > t.endDate;
           
           const borderStyle = isOverdue ? 'border-[2px] border-red-500 shadow-sm' : 'border border-black/10';
@@ -548,13 +623,11 @@
       });
     }
 
-    // Funzione Spunta Rapida Completamento (gestisce la data di completamento effettiva)
     window.toggleTaskCompletion = async function(taskId, isCurrentlyCompleted) {
       const todayStr = new Date().toISOString().split('T')[0];
       
       let updates = { completed: !isCurrentlyCompleted };
       
-      // Se si segna come completata aggiunge la data odierna, se si toglie la spunta si elimina.
       if (!isCurrentlyCompleted) {
         updates.completionDate = todayStr;
       } else {
@@ -614,9 +687,12 @@
         const dateVal = defaultDate || new Date().toISOString().split('T')[0];
         document.getElementById('taskStartDate').value = dateVal; document.getElementById('taskEndDate').value = dateVal;
         document.getElementById('taskReminder').value = 'none'; reminderInput.classList.add('hidden'); reminderInput.value = '';
-        cbGroup.innerHTML = window.collaborators.map((c, i) => `
-          <label class="flex items-center space-x-2 text-xs p-1.5 rounded cursor-pointer font-semibold shadow-sm" style="background-color: ${c.bg}; color: ${c.text}">
-            <input type="checkbox" value="${c.id}" ${i===0 ? 'checked' : ''} class="rounded border-slate-300"> <span class="truncate">${c.name}</span></label>`).join('');
+        cbGroup.innerHTML = window.collaborators.map((c, i) => {
+          // Preseleziona l'utente corrente se sta creando un task
+          const isMe = window.currentUserId === c.id;
+          return `<label class="flex items-center space-x-2 text-xs p-1.5 rounded cursor-pointer font-semibold shadow-sm" style="background-color: ${c.bg}; color: ${c.text}">
+            <input type="checkbox" value="${c.id}" ${isMe ? 'checked' : ''} class="rounded border-slate-300"> <span class="truncate">${c.name}</span></label>`;
+        }).join('');
         titleEl.innerHTML = '<i class="fa-regular fa-calendar-plus text-blue-400"></i> Programma Nuovo Lavoro Cloud';
         delBtn.classList.add('hidden');
       }
@@ -643,15 +719,14 @@
 
       const todayStr = new Date().toISOString().split('T')[0];
       
-      // Controllo della data effettiva di completamento quando si usa la finestra modale
       let completionDate = null;
       if (exGroupId) {
         const existingTasks = window.tasks.filter(t => t.groupId === exGroupId);
         if (existingTasks.length > 0) {
            if (completed && !existingTasks[0].completed) {
-             completionDate = todayStr; // L'hai appena completata
+             completionDate = todayStr; 
            } else if (completed && existingTasks[0].completed) {
-             completionDate = existingTasks[0].completionDate || todayStr; // Era già completata, mantiene la data
+             completionDate = existingTasks[0].completionDate || todayStr; 
            }
         }
       } else {
