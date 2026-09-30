@@ -258,7 +258,6 @@
     window.currentView = 'month'; 
     window.shownReminders = new Set();
     
-    // Variabile per tenere traccia dell'utente loggato
     window.currentUserId = localStorage.getItem('integra_current_user') || null;
 
     signInAnonymously(auth).then(() => {
@@ -279,13 +278,16 @@
           ];
           defaultCollabs.forEach(async c => { await setDoc(doc(db, "collaborators", c.id), c); });
         } else {
-          const wasEmpty = window.collaborators.length === 0;
           window.collaborators = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
-          if (wasEmpty) window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
           
-          window.renderLoginScreen(); // Rende i bottoni per il login
+          window.renderLoginScreen(); 
           window.renderCollaboratorsList();
           window.renderManageCollaboratorsList();
+          
+          // Se l'utente era già loggato in precedenza, applica i filtri corretti all'avvio
+          if (window.currentUserId) {
+            applyUserFilters(window.currentUserId, false);
+          }
           window.renderCalendar();
         }
         isFirstLoadCollabs = false;
@@ -313,12 +315,27 @@
       });
     }
 
-    // --- GESTIONE LOGIN PROFILI ---
+    // --- GESTIONE LOGIN PROFILI & ADMIN ---
     window.renderLoginScreen = function() {
       const loginOverlay = document.getElementById('login-overlay');
       const container = document.getElementById('login-collaborators-list');
       
-      container.innerHTML = window.collaborators.map(c => `
+      // Pulsante Admin in evidenza in cima
+      let htmlContent = `
+        <button onclick="selectUser('admin')" class="flex items-center justify-between p-3 rounded-xl border-2 border-slate-900 bg-slate-900 text-white hover:bg-slate-800 transition shadow-md w-full text-left">
+          <div class="flex items-center space-x-3">
+            <div class="bg-blue-600 text-white w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm"><i class="fa-solid fa-user-shield"></i></div>
+            <div>
+              <div class="font-bold text-sm sm:text-base">Amministratore (Admin)</div>
+              <div class="text-xs text-slate-300">Visualizza tutte le attività del team</div>
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-slate-400 mr-2"></i>
+        </button>
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left pt-2 pb-1">Oppure seleziona il tuo profilo:</div>
+      `;
+
+      htmlContent += window.collaborators.map(c => `
         <button onclick="selectUser('${c.id}')" class="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition shadow-sm w-full text-left bg-white" style="border-left: 5px solid ${c.bg}">
           <div>
             <div class="font-bold text-slate-800 text-sm sm:text-base">${c.name}</div>
@@ -328,15 +345,22 @@
         </button>
       `).join('');
 
-      // Se l'utente è già loggato e presente nel db, nascondi l'overlay
+      container.innerHTML = htmlContent;
+
       if (window.currentUserId) {
-        const userExists = window.collaborators.find(c => c.id === window.currentUserId);
-        if (userExists) {
+        if (window.currentUserId === 'admin') {
           loginOverlay.classList.add('opacity-0', 'pointer-events-none');
           setTimeout(() => loginOverlay.classList.add('hidden'), 300);
-          document.getElementById('currentUserDisplay').textContent = "Accesso come: " + userExists.name;
+          document.getElementById('currentUserDisplay').textContent = "Accesso come: Amministratore";
         } else {
-          window.logoutUser(); // Profilo eliminato, forza il logout
+          const userExists = window.collaborators.find(c => c.id === window.currentUserId);
+          if (userExists) {
+            loginOverlay.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => loginOverlay.classList.add('hidden'), 300);
+            document.getElementById('currentUserDisplay').textContent = "Accesso come: " + userExists.name;
+          } else {
+            window.logoutUser();
+          }
         }
       }
     }
@@ -345,15 +369,28 @@
       window.currentUserId = id;
       localStorage.setItem('integra_current_user', id);
       
-      const user = window.collaborators.find(c => c.id === id);
-      document.getElementById('currentUserDisplay').textContent = "Accesso come: " + user.name;
+      applyUserFilters(id, true);
       
       const loginOverlay = document.getElementById('login-overlay');
       loginOverlay.classList.add('opacity-0', 'pointer-events-none');
       setTimeout(() => loginOverlay.classList.add('hidden'), 300);
-      
-      // Imposta i filtri per vedere tutti
-      window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
+    }
+
+    function applyUserFilters(userId, forceApply) {
+      if (userId === 'admin') {
+        document.getElementById('currentUserDisplay').textContent = "Accesso come: Amministratore";
+        // Admin vede tutti di default
+        window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
+      } else {
+        const user = window.collaborators.find(c => c.id === userId);
+        if (user) {
+          document.getElementById('currentUserDisplay').textContent = "Accesso come: " + user.name;
+          // Collaboratore vede SOLO le sue attività di default
+          window.activeCollaboratorFilters = [user.id];
+        } else {
+          window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
+        }
+      }
       window.renderCollaboratorsList();
       window.renderCalendar();
     }
@@ -389,7 +426,7 @@
     }
 
     window.checkReminders = function() {
-      if(!window.currentUserId) return; // Controlla promemoria solo se loggato
+      if(!window.currentUserId) return;
       
       const today = new Date().toISOString().split('T')[0];
       const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
@@ -397,6 +434,9 @@
       
       window.tasks.forEach(t => {
         if (!t.reminder || t.reminder === 'none' || t.completed) return;
+        // Se non è admin, mostra i promemoria solo dei suoi task
+        if (window.currentUserId !== 'admin' && t.assigneeId !== window.currentUserId) return;
+
         const collab = window.collaborators.find(c => c.id === t.assigneeId) || {name: 'Team', bg: '#2563eb'};
         let shouldRemind = false, msg = '';
         if (t.reminder === 'same_day' && t.startDate === today) { shouldRemind = true; msg = `<strong>Inizia oggi:</strong> ${t.title}<br/><span class="opacity-80">Assegnato a: ${collab.name}</span>`; } 
@@ -688,10 +728,15 @@
         document.getElementById('taskStartDate').value = dateVal; document.getElementById('taskEndDate').value = dateVal;
         document.getElementById('taskReminder').value = 'none'; reminderInput.classList.add('hidden'); reminderInput.value = '';
         cbGroup.innerHTML = window.collaborators.map((c, i) => {
-          // Preseleziona l'utente corrente se sta creando un task
-          const isMe = window.currentUserId === c.id;
+          // Se è admin seleziona il primo, se è collaboratore seleziona se stesso
+          let isSelected = false;
+          if (window.currentUserId === 'admin') {
+            isSelected = i === 0;
+          } else {
+            isSelected = window.currentUserId === c.id;
+          }
           return `<label class="flex items-center space-x-2 text-xs p-1.5 rounded cursor-pointer font-semibold shadow-sm" style="background-color: ${c.bg}; color: ${c.text}">
-            <input type="checkbox" value="${c.id}" ${isMe ? 'checked' : ''} class="rounded border-slate-300"> <span class="truncate">${c.name}</span></label>`;
+            <input type="checkbox" value="${c.id}" ${isSelected ? 'checked' : ''} class="rounded border-slate-300"> <span class="truncate">${c.name}</span></label>`;
         }).join('');
         titleEl.innerHTML = '<i class="fa-regular fa-calendar-plus text-blue-400"></i> Programma Nuovo Lavoro Cloud';
         delBtn.classList.add('hidden');
