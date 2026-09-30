@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>INTEGRA PROGETTI - Cloud Calendar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .toast-enter { transform: translateX(100%); opacity: 0; }
+    .toast-enter-active { transform: translateX(0); opacity: 1; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+    .toast-exit { transform: translateX(100%); opacity: 0; transition: all 0.3s ease-in; }
+  </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 antialiased h-screen flex flex-col overflow-hidden relative">
+
+  <!-- Schermata di Accesso / Selezione Profilo -->
+  <div id="loginScreen" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 transform transition-all">
+      <div class="bg-slate-900 text-white p-6 text-center space-y-2">
+        <div class="inline-flex bg-blue-600 text-white p-3 rounded-xl shadow-lg mb-1">
+          <i class="fa-solid fa-compass-drafting text-2xl"></i>
+        </div>
+        <h2 class="text-xl font-bold">INTEGRA PROGETTI</h2>
+        <p class="text-xs text-slate-400">Seleziona il tuo profilo collaboratore per accedere all'agenda personale</p>
+      </div>
+      <div class="p-6 space-y-4">
+        <div id="loginCollaboratorsList" class="space-y-2.5 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+          <div class="text-center text-xs text-slate-400 py-6">Caricamento profili in corso...</div>
+        </div>
+        <div class="pt-2 border-t border-slate-100 flex justify-between items-center">
+          <button onclick="loginAsAdmin()" class="text-xs font-semibold text-slate-600 hover:text-blue-600 transition flex items-center gap-1.5 py-2 px-3 rounded-lg hover:bg-slate-50">
+            <i class="fa-solid fa-users-viewfinder"></i> Visualizza Tutti (Admin)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenitore Notifiche Pop-up -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 w-72 sm:w-80"></div>
+
+  <!-- Header App Mobile & Desktop -->
+  <header class="bg-slate-900 text-white px-3 sm:px-6 py-2.5 shadow-md flex justify-between items-center flex-shrink-0 z-10">
+    <div class="flex items-center space-x-2 sm:space-x-3">
+      <div class="bg-blue-600 text-white p-1.5 sm:p-2 rounded-lg font-bold tracking-wider text-xs sm:text-sm flex items-center gap-1.5">
+        <i class="fa-solid fa-compass-drafting text-base sm:text-lg"></i>
+        <span class="hidden xs:inline">INTEGRA</span>
+      </div>
+      <div>
+        <h1 class="font-bold text-sm sm:text-lg leading-tight">INTEGRA PROGETTI</h1>
+        <p class="text-[10px] sm:text-xs text-slate-400 hidden sm:block">Database Cloud Condiviso - Sincronizzazione Attiva <i class="fa-solid fa-cloud-arrow-up ml-1 text-green-400"></i></p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-1.5 sm:space-x-2">
+      <div id="loggedUserProfileBadge" class="hidden sm:flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200">
+        <span class="w-2.5 h-2.5 rounded-full bg-green-400"></span>
+        <span id="loggedUserNameDisplay">Utente</span>
+      </div>
+      <button onclick="openProfileSelector()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5" title="Cambia Profilo / Logout"><i class="fa-solid fa-right-from-bracket"></i> <span class="hidden md:inline">Cambia Utente</span></button>
+      <button onclick="toggleMobileSidebar()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 sm:hidden rounded-lg text-xs font-semibold flex items-center gap-1" title="Filtri Team"><i class="fa-solid fa-users-gear"></i></button>
+      <button onclick="openCollaboratorsManageModal()" class="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition items-center gap-1.5"><i class="fa-solid fa-user-gear"></i> Team</button>
+      <button onclick="openCategoriesManageModal()" class="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition items-center gap-1.5"><i class="fa-solid fa-list-check"></i> Tipologie</button>
+      <button onclick="openTaskModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-semibold transition shadow flex items-center gap-1.5 sm:gap-2 ml-1"><i class="fa-solid fa-plus"></i> <span class="hidden xs:inline">Nuovo</span> Lavoro</button>
+    </div>
+  </header>
+
+  <!-- Layout Principale -->
+  <div class="flex flex-1 overflow-hidden relative">
+    
+    <!-- Sidebar Filtri (Responsive / Mobile Drawer) -->
+    <aside id="sidebarFilters" class="absolute sm:relative inset-y-0 left-0 z-30 w-72 sm:w-80 bg-white border-r border-slate-200 p-4 flex flex-col justify-between flex-shrink-0 custom-scrollbar overflow-y-auto transform -translate-x-full sm:translate-x-0 transition-transform duration-300 shadow-xl sm:shadow-none">
+      <div class="space-y-5">
+        <div class="flex justify-between items-center sm:hidden pb-2 border-b border-slate-100">
+          <span class="font-bold text-xs uppercase text-slate-700">Pannello Filtri</span>
+          <button onclick="toggleMobileSidebar()" class="text-slate-400 hover:text-slate-700 text-base"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Collaboratori</h2>
+            <div class="space-x-2">
+              <button onclick="resetCollaboratorFilter()" class="text-[11px] text-blue-600 hover:underline">Tutti</button>
+              <button onclick="openCollaboratorsManageModal(); toggleMobileSidebar();" class="text-[11px] text-slate-500 hover:text-slate-800 sm:inline"><i class="fa-solid fa-pen"></i></button>
+            </div>
+          </div>
+          <div id="collaboratorsList" class="space-y-2"></div>
+        </div>
+        <hr class="border-slate-200">
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Tipologia Pratiche</h2>
+            <button onclick="openCategoriesManageModal(); toggleMobileSidebar();" class="text-[11px] text-slate-500 hover:text-slate-800"><i class="fa-solid fa-pen"></i></button>
+          </div>
+          <div id="categoriesList" class="space-y-1.5 text-xs text-slate-600"></div>
+        </div>
+      </div>
+      <div class="pt-4 text-[11px] text-slate-400 text-center border-t border-slate-200 mt-6">INTEGRA PROGETTI &copy; 2026</div>
+    </aside>
+
+    <!-- Area Calendario -->
+    <main class="flex-1 flex flex-col bg-white overflow-hidden w-full">
+      <div class="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-stretch sm:items-center bg-slate-50 flex-shrink-0 gap-2 sm:gap-0">
+        <div class="flex items-center justify-between sm:justify-start space-x-2 sm:space-x-3">
+          <button onclick="prevMonth()" class="p-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-slate-600 transition"><i class="fa-solid fa-chevron-left text-xs"></i></button>
+          <h2 id="currentMonthYear" class="text-sm sm:text-lg font-bold text-slate-800 min-w-[140px] sm:min-w-[180px] text-center">Caricamento...</h2>
+          <button onclick="nextMonth()" class="p-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-slate-600 transition"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+          <button onclick="goToToday()" class="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-xs font-medium rounded-lg text-slate-700 transition">Oggi</button>
+        </div>
+        <div class="flex items-center space-x-2">
+          <div class="relative w-full sm:w-60">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+            <input type="text" id="searchInput" oninput="renderCalendar()" placeholder="Cerca lavoro, cantiere..." class="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid Calendario -->
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 bg-slate-100">
+        <div class="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col h-full min-h-[500px]">
+          <div class="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center font-bold text-[10px] sm:text-xs text-slate-500 py-2 uppercase tracking-wider flex-shrink-0">
+            <div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div><div class="text-slate-400">Sab</div><div class="text-slate-400">Dom</div>
+          </div>
+          <div id="calendarDaysGrid" class="grid grid-cols-7 flex-1 auto-rows-fr gap-px bg-slate-200"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Inserimento Lavoro -->
+  <div id="taskModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-3 sm:p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
+      <div class="bg-slate-900 text-white px-4 sm:px-6 py-3.5 flex justify-between items-center flex-shrink-0">
+        <h3 id="modalTitle" class="font-bold text-sm sm:text-base flex items-center gap-2"><i class="fa-regular fa-calendar-plus text-blue-400"></i> Programma Nuovo Lavoro</h3>
+        <button onclick="closeTaskModal()" class="text-slate-400 hover:text-white text-base"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="taskForm" onsubmit="saveTask(event)" class="p-4 sm:p-6 space-y-3.5 overflow-y-auto custom-scrollbar flex-1">
+        <input type="hidden" id="groupId">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Titolo Attività / Commessa *</label>
+          <input type="text" id="taskTitle" required placeholder="Es. Sopralluogo Cantiere..." class="w-full text-xs sm:text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Assegna a Collaboratori *</label>
+          <div id="assigneesCheckboxGroup" class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 border border-slate-300 rounded-lg bg-slate-50 max-h-32 overflow-y-auto custom-scrollbar"></div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Tipologia Lavoro</label>
+            <select id="taskCategory" class="w-full text-xs sm:text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1 text-blue-600"><i class="fa-regular fa-bell"></i> Promemoria Pop-up</label>
+            <div class="flex flex-col gap-2">
+              <select id="taskReminder" onchange="toggleCustomReminderDate()" class="w-full text-xs sm:text-sm p-2.5 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-blue-50/50">
+                <option value="none">Nessun avviso</option>
+                <option value="same_day">Il giorno stesso (Inizio)</option>
+                <option value="day_before">1 giorno prima</option>
+                <option value="custom">Data personalizzata...</option>
+              </select>
+              <input type="date" id="taskCustomReminderDate" class="hidden w-full text-xs sm:text-sm p-2.5 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-blue-50/50">
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="block text-xs font-bold text-slate-700 uppercase mb-1">Data Inizio *</label><input type="date" id="taskStartDate" required class="w-full text-xs sm:text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"></div>
+          <div><label class="block text-xs font-bold text-slate-700 uppercase mb-1">Data Fine *</label><input type="date" id="taskEndDate" required class="w-full text-xs sm:text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"></div>
+        </div>
+        <div class="flex items-center space-x-2 pt-1 bg-slate-50 p-2.5 border border-slate-300 rounded-lg">
+          <input type="checkbox" id="taskCompleted" class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer">
+          <label for="taskCompleted" class="text-xs font-bold text-slate-700 uppercase cursor-pointer">Segna attività come completata</label>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Cliente / Cantiere / Note</label>
+          <textarea id="taskNotes" rows="2" placeholder="Indirizzo cantiere, contatti..." class="w-full text-xs sm:text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"></textarea>
+        </div>
+      </form>
+      <div class="flex justify-between items-center p-3.5 sm:p-4 border-t border-slate-200 flex-shrink-0 bg-slate-50">
+        <button type="button" id="deleteBtn" onclick="deleteTaskGroup()" class="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-lg text-xs font-semibold transition hidden"><i class="fa-solid fa-trash mr-1"></i> Elimina</button>
+        <div class="flex space-x-2 ml-auto">
+          <button type="button" onclick="closeTaskModal()" class="px-3.5 py-2 border border-slate-300 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-semibold">Annulla</button>
+          <button type="submit" form="taskForm" class="px-4.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow">Salva Lavoro</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Gestione Team -->
+  <div id="collaboratorsManageModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200">
+      <div class="bg-slate-900 text-white px-5 py-3.5 flex justify-between items-center"><h3 class="font-bold text-sm sm:text-base"><i class="fa-solid fa-user-gear"></i> Gestione Team</h3><button onclick="closeCollaboratorsManageModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="p-4 sm:p-6 space-y-4">
+        <div class="bg-slate-50 p-3 border border-slate-200 rounded-lg space-y-2">
+          <div class="text-xs font-bold text-slate-700 uppercase">Aggiungi Collaboratore</div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input type="text" id="newCollabName" placeholder="Nome Cognome" class="text-xs p-2 border border-slate-300 rounded focus:outline-none">
+            <input type="text" id="newCollabRole" placeholder="Ruolo / Mansione" class="text-xs p-2 border border-slate-300 rounded focus:outline-none">
+            <div class="flex items-center space-x-2"><input type="color" id="newCollabColor" value="#3b82f6" class="w-8 h-8 rounded border cursor-pointer"><button onclick="addNewCollaborator()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 sm:py-1.5 rounded text-xs font-semibold">Aggiungi</button></div>
+          </div>
+        </div>
+        <div class="text-xs font-bold text-slate-700 uppercase">Collaboratori Attuali</div>
+        <div id="manageCollaboratorsList" class="space-y-2 max-h-52 overflow-y-auto custom-scrollbar"></div>
+        <div class="flex justify-end pt-3 border-t"><button onclick="closeCollaboratorsManageModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold">Chiudi</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Gestione Tipologie -->
+  <div id="categoriesManageModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200">
+      <div class="bg-slate-900 text-white px-5 py-3.5 flex justify-between items-center"><h3 class="font-bold text-sm sm:text-base"><i class="fa-solid fa-list-check"></i> Gestione Tipologie</h3><button onclick="closeCategoriesManageModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="p-4 sm:p-6 space-y-4">
+        <div class="flex gap-2">
+          <input type="text" id="newCategoryName" placeholder="Es. Direzione Lavori..." class="flex-1 text-xs p-2.5 border border-slate-300 rounded-lg focus:outline-none">
+          <button onclick="addNewCategory()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-xs font-semibold">Aggiungi</button>
+        </div>
+        <div class="text-xs font-bold text-slate-700 uppercase">Tipologie Attive</div>
+        <div id="manageCategoriesList" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar"></div>
+        <div class="flex justify-end pt-3 border-t"><button onclick="closeCategoriesManageModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold">Chiudi</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FIREBASE & SCRIPT APPLICAZIONE -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCQ8CqiqBOzlwh1sFnAsAfjdeZgrUqUVAE",
+      authDomain: "integra-progetti.firebaseapp.com",
+      projectId: "integra-progetti",
+      storageBucket: "integra-progetti.firebasestorage.app",
+      messagingSenderId: "1083899327593",
+      appId: "1:1083899327593:web:3cf514e4a3ec1d1d4a5ef8",
+      measurementId: "G-EVNRYQR8T8"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    window.collaborators = [];
+    window.categories = [];
+    window.tasks = [];
+    window.activeCollaboratorFilters = [];
+    window.currentLoggedInUser = null; // ID del collaboratore loggato o 'admin'
+    window.currentDate = new Date();
+    window.shownReminders = new Set();
+
+    signInAnonymously(auth).then(() => {
+      initAppListeners();
+    }).catch((error) => {
+      console.error("Errore autenticazione cloud:", error);
+    });
+
+    function initAppListeners() {
+      let isFirstLoadCollabs = true;
+      onSnapshot(collection(db, "collaborators"), (snapshot) => {
+        if (snapshot.empty && isFirstLoadCollabs) {
+          const defaultCollabs = [
+            { id: 'c1', name: 'Marco Rossi', role: 'Geometra Senior', bg: '#2563eb', text: '#ffffff' },
+            { id: 'c2', name: 'Laura Bianchi', role: 'Progettista / CAD', bg: '#059669', text: '#ffffff' },
+            { id: 'c3', name: 'Andrea Verdi', role: 'Sicurezza & Cantieri', bg: '#d97706', text: '#ffffff' },
+            { id: 'c4', name: 'Elena Neri', role: 'Catasto & Topografia', bg: '#7c3aed', text: '#ffffff' }
+          ];
+          defaultCollabs.forEach(async c => { await setDoc(doc(db, "collaborators", c.id), c); });
+        } else {
+          window.collaborators = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+          window.renderLoginScreenProfiles();
+          window.renderCollaboratorsList();
+          window.renderManageCollaboratorsList();
+          window.renderCalendar();
+        }
+        isFirstLoadCollabs = false;
+      });
+
+      let isFirstLoadCats = true;
+      onSnapshot(collection(db, "categories"), (snapshot) => {
+        if (snapshot.empty && isFirstLoadCats) {
+          const defaultCats = [ { id: 'cat1', name: 'Sicurezza / PSC' }, { id: 'cat2', name: 'Pratiche Edilizie' }, { id: 'cat3', name: 'Catasto & Rilievi' }, { id: 'cat4', name: 'Sopralluogo / Verifiche' } ];
+          defaultCats.forEach(async cat => { await setDoc(doc(db, "categories", cat.id), cat); });
+        } else {
+          window.categories = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+          window.renderCategoriesList();
+          window.renderManageCategoriesList();
+        }
+        isFirstLoadCats = false;
+      });
+
+      onSnapshot(collection(db, "tasks"), (snapshot) => {
+        window.tasks = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+        window.renderCollaboratorsList();
+        window.renderCategoriesList();
+        window.renderCalendar();
+        window.checkReminders();
+      });
+    }
+
+    // Gestione Login / Selezione Profilo
+    window.renderLoginScreenProfiles = function() {
+      const container = document.getElementById('loginCollaboratorsList');
+      if (!window.collaborators.length) {
+        container.innerHTML = `<div class="text-center text-xs text-slate-400 py-6">Nessun profilo disponibile.</div>`;
+        return;
+      }
+      container.innerHTML = window.collaborators.map(c => `
+        <button onclick="loginAsCollaborator('${c.id}')" class="w-full p-3 rounded-xl border border-slate-200 hover:border-slate-400 transition flex items-center justify-between text-left group shadow-sm hover:shadow" style="background-color: ${c.bg}15;">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white shadow-sm" style="background-color: ${c.bg}">
+              ${c.name.charAt(0)}
+            </div>
+            <div>
+              <div class="font-bold text-xs sm:text-sm text-slate-800">${c.name}</div>
+              <div class="text-[11px] text-slate-500">${c.role}</div>
+            </div>
+          </div>
+          <div class="text-xs font-semibold text-blue-600 group-hover:translate-x-1 transition flex items-center gap-1">
+            <span>Accedi</span> <i class="fa-solid fa-arrow-right"></i>
+          </div>
+        </button>
+      `).join('');
+    }
+
+    window.loginAsCollaborator = function(collabId) {
+      window.currentLoggedInUser = collabId;
+      window.activeCollaboratorFilters = [collabId]; // Filtro predefinito solo sulle proprie attività
+      
+      const collab = window.collaborators.find(c => c.id === collabId);
+      if (collab) {
+        document.getElementById('loggedUserNameDisplay').textContent = collab.name;
+        document.getElementById('loggedUserProfileBadge').style.borderColor = collab.bg;
+      }
+      document.getElementById('loginScreen').classList.add('hidden');
+      window.renderCollaboratorsList();
+      window.renderCalendar();
+    }
+
+    window.loginAsAdmin = function() {
+      window.currentLoggedInUser = 'admin';
+      window.activeCollaboratorFilters = window.collaborators.map(c => c.id); // Vede tutto
+      document.getElementById('loggedUserNameDisplay').textContent = 'Admin (Tutti)';
+      document.getElementById('loginScreen').classList.add('hidden');
+      window.renderCollaboratorsList();
+      window.renderCalendar();
+    }
+
+    window.openProfileSelector = function() {
+      window.renderLoginScreenProfiles();
+      document.getElementById('loginScreen').classList.remove('hidden');
+    }
+
+    window.toggleMobileSidebar = function() {
+      const sb = document.getElementById('sidebarFilters');
+      sb.classList.toggle('-translate-x-full');
+    }
+
+    window.showToast = function(title, message, colorHex) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast-enter bg-white border-l-4 rounded shadow-lg p-3 sm:p-4 flex items-start space-x-3 cursor-pointer text-xs sm:text-sm';
+      toast.style.borderColor = colorHex || '#2563eb';
+      toast.innerHTML = `
+        <div class="bg-blue-50 rounded-full p-2 flex-shrink-0" style="color: ${colorHex || '#2563eb'}"><i class="fa-solid fa-bell text-sm"></i></div>
+        <div class="flex-1 pt-0.5"><h4 class="font-bold text-slate-800 leading-tight">${title}</h4><p class="text-[11px] sm:text-xs text-slate-600 mt-0.5">${message}</p></div>
+        <button class="text-slate-400 hover:text-slate-600" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
+      `;
+      container.appendChild(toast);
+      requestAnimationFrame(() => { toast.classList.remove('toast-enter'); toast.classList.add('toast-enter-active'); });
+      setTimeout(() => { toast.classList.add('toast-exit'); setTimeout(() => { if(toast.parentElement) toast.remove(); }, 300); }, 7000);
+    }
+
+    window.checkReminders = function() {
+      const today = new Date().toISOString().split('T')[0];
+      const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
+      const tmrwStr = tmrw.toISOString().split('T')[0];
+      
+      window.tasks.forEach(t => {
+        if (!t.reminder || t.reminder === 'none' || t.completed) return;
+        // Se c'è un utente loggato (non admin), avvisa solo per le sue attività
+        if (window.currentLoggedInUser && window.currentLoggedInUser !== 'admin' && t.assigneeId !== window.currentLoggedInUser) return;
+
+        const collab = window.collaborators.find(c => c.id === t.assigneeId) || {name: 'Team', bg: '#2563eb'};
+        let shouldRemind = false, msg = '';
+        if (t.reminder === 'same_day' && t.startDate === today) { shouldRemind = true; msg = `<strong>Inizia oggi:</strong> ${t.title}<br/><span class="opacity-80">Assegnato a: ${collab.name}</span>`; } 
+        else if (t.reminder === 'day_before' && t.startDate === tmrwStr) { shouldRemind = true; msg = `<strong>In programma domani:</strong> ${t.title}<br/><span class="opacity-80">Assegnato a: ${collab.name}</span>`; }
+        else if (t.reminder === 'custom' && t.reminderDate === today) { shouldRemind = true; msg = `<strong>Promemoria fissato:</strong> ${t.title}<br/><span class="opacity-80">Assegnato a: ${collab.name}</span>`; }
+        
+        const reminderKey = `${t.id}_${today}_${t.reminder}`; 
+        if (shouldRemind && !window.shownReminders.has(reminderKey)) {
+          window.shownReminders.add(reminderKey);
+          window.showToast('Promemoria', msg, collab.bg);
+        }
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      setTimeout(window.checkReminders, 2000); 
+      setInterval(window.checkReminders, 60000);
+    });
+
+    window.toggleCustomReminderDate = function() {
+      const reminderSelect = document.getElementById('taskReminder').value;
+      const customDateInput = document.getElementById('taskCustomReminderDate');
+      if (reminderSelect === 'custom') {
+        customDateInput.classList.remove('hidden');
+        if (!customDateInput.value) customDateInput.value = new Date().toISOString().split('T')[0];
+      } else { customDateInput.classList.add('hidden'); }
+    }
+
+    window.renderCollaboratorsList = function() {
+      const container = document.getElementById('collaboratorsList');
+      container.innerHTML = window.collaborators.map(c => {
+        const isChecked = window.activeCollaboratorFilters.includes(c.id);
+        const taskCount = window.tasks.filter(t => t.assigneeId === c.id && !t.completed).length;
+        return `
+          <div onclick="toggleCollaboratorFilter('${c.id}')" class="p-2.5 rounded-lg border transition cursor-pointer flex items-center justify-between shadow-sm hover:shadow ${isChecked ? 'opacity-100 ring-2 ring-slate-700' : 'opacity-40 bg-slate-100 border-slate-300'}" style="background-color: ${c.bg}; color: ${c.text}">
+            <div class="flex items-center space-x-2"><input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleCollaboratorFilter('${c.id}')" class="rounded text-slate-900 focus:ring-0 cursor-pointer">
+              <div><div class="text-xs font-bold">${c.name}</div><div class="text-[10px] opacity-90">${c.role}</div></div>
+            </div><span class="text-[11px] px-2 py-0.5 rounded-full font-bold bg-black/20">${taskCount}</span>
+          </div>`;
+      }).join('');
+    }
+
+    window.renderCategoriesList = function() {
+      document.getElementById('categoriesList').innerHTML = window.categories.map(cat => `
+        <div class="flex items-center justify-between p-1.5 rounded hover:bg-slate-50 border border-transparent">
+          <span class="truncate"><i class="fa-solid fa-tag text-slate-400 mr-2"></i>${cat.name}</span>
+          <span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono text-[10px]">${window.tasks.filter(t => t.category === cat.name && !t.completed).length}</span>
+        </div>`).join('');
+    }
+
+    window.toggleCollaboratorFilter = function(id) {
+      if (window.activeCollaboratorFilters.includes(id)) window.activeCollaboratorFilters = window.activeCollaboratorFilters.filter(item => item !== id);
+      else window.activeCollaboratorFilters.push(id);
+      window.renderCollaboratorsList(); window.renderCalendar();
+    }
+    window.resetCollaboratorFilter = function() { window.activeCollaboratorFilters = window.collaborators.map(c => c.id); window.renderCollaboratorsList(); window.renderCalendar(); }
+    window.prevMonth = function() { window.currentDate.setMonth(window.currentDate.getMonth() - 1); window.renderCalendar(); }
+    window.nextMonth = function() { window.currentDate.setMonth(window.currentDate.getMonth() + 1); window.renderCalendar(); }
+    window.goToToday = function() { window.currentDate = new Date(); window.renderCalendar(); }
+
+    window.toggleTaskComplete = async function(event, taskId) {
+      event.stopPropagation();
+      const task = window.tasks.find(t => t.id === taskId);
+      if (!task) return;
+      const newCompletedState = !task.completed;
+      await setDoc(doc(db, "tasks", taskId), { completed: newCompletedState }, { merge: true });
+    }
+
+    window.renderCalendar = function() {
+      const year = window.currentDate.getFullYear(); const month = window.currentDate.getMonth();
+      const monthNames = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+      document.getElementById('currentMonthYear').textContent = `${monthNames[month]} ${year}`;
+
+      const firstDay = new Date(year, month, 1).getDay();
+      const startingDay = firstDay === 0 ? 6 : firstDay - 1;
+      const totalDays = new Date(year, month + 1, 0).getDate();
+      
+      const gridContainer = document.getElementById('calendarDaysGrid');
+      gridContainer.innerHTML = '';
+
+      const prevMonthLastDay = new Date(year, month, 0).getDate();
+      for (let i = startingDay - 1; i >= 0; i--) gridContainer.innerHTML += `<div class="bg-slate-50 text-slate-300 p-1 min-h-[80px] sm:min-h-[110px] text-xs font-medium select-none">${prevMonthLastDay - i}</div>`;
+
+      const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+      const todayDate = new Date();
+
+      for (let day = 1; day <= totalDays; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const isToday = todayDate.getFullYear() === year && todayDate.getMonth() === month && todayDate.getDate() === day;
+        const dayCell = document.createElement('div');
+        dayCell.className = `bg-white p-1 min-h-[85px] sm:min-h-[120px] flex flex-col justify-start transition hover:bg-slate-50/80 group ${isToday ? 'bg-blue-50/40 ring-1 ring-blue-400' : ''}`;
+        dayCell.innerHTML = `
+          <div class="flex justify-between items-center mb-1 px-0.5"><span class="text-[11px] sm:text-xs font-bold ${isToday ? 'bg-blue-600 text-white w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full flex items-center justify-center' : 'text-slate-700'}">${day}</span>
+          <button onclick="openTaskModal('${dateStr}')" class="opacity-100 sm:opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 text-xs transition"><i class="fa-solid fa-plus-circle"></i></button></div>
+        `;
+        const tasksContainer = document.createElement('div');
+        tasksContainer.className = 'space-y-1 overflow-y-auto max-h-[70px] sm:max-h-[95px] custom-scrollbar';
+
+        const dayTasks = window.tasks.filter(t => {
+          return dateStr >= t.startDate && dateStr <= t.endDate && window.activeCollaboratorFilters.includes(t.assigneeId) &&
+                 (t.title.toLowerCase().includes(searchQuery) || (t.notes && t.notes.toLowerCase().includes(searchQuery)));
+        });
+        dayTasks.forEach(t => {
+          const collab = window.collaborators.find(c => c.id === t.assigneeId) || { name: 'N/A', bg: '#64748b', text: '#fff' };
+          const hasReminderIcon = t.reminder && t.reminder !== 'none' ? '<i class="fa-solid fa-bell text-[8px] opacity-70"></i>' : '';
+          const isCompleted = t.completed === true;
+          
+          const taskCard = document.createElement('div');
+          taskCard.className = `text-[10px] sm:text-[11px] p-1 rounded shadow-sm hover:shadow-md transition cursor-pointer flex flex-col justify-between leading-tight font-medium border border-black/10 relative`;
+          
+          taskCard.style.backgroundColor = collab.bg; 
+          taskCard.style.color = collab.text;
+          if (isCompleted) {
+            taskCard.style.opacity = '0.6';
+          }
+          
+          taskCard.onclick = () => window.openTaskModal(null, t.groupId);
+          taskCard.innerHTML = `
+            <div class="font-bold truncate flex items-center gap-1">
+              <input type="checkbox" ${isCompleted ? 'checked' : ''} onclick="toggleTaskComplete(event, '${t.id}')" class="w-3 h-3 rounded text-slate-700 focus:ring-0 cursor-pointer flex-shrink-0" title="Segna come completata">
+              ${hasReminderIcon}
+              <span class="truncate ${isCompleted ? 'line-through' : ''}">${t.title}</span>
+            </div>
+            <div class="text-[8px] sm:text-[9px] opacity-90 truncate mt-0.5 flex justify-between items-center"><span>${collab.name.split(' ')[0]}</span></div>`;
+          tasksContainer.appendChild(taskCard);
+        });
+        dayCell.appendChild(tasksContainer);
+        gridContainer.appendChild(dayCell);
+      }
+    }
+
+    window.openTaskModal = function(defaultDate = null, groupId = null) {
+      document.getElementById('taskForm').reset();
+      document.getElementById('taskCategory').innerHTML = window.categories.map(cat => `<option value="${cat.name}">${cat.name}</option>`).join('');
+      const cbGroup = document.getElementById('assigneesCheckboxGroup');
+      const titleEl = document.getElementById('modalTitle');
+      const delBtn = document.getElementById('deleteBtn');
+      const reminderInput = document.getElementById('taskCustomReminderDate');
+      const completedCheckbox = document.getElementById('taskCompleted');
+
+      if (groupId) {
+        const groupTasks = window.tasks.filter(t => t.groupId === groupId);
+        if(!groupTasks.length) return;
+        const ft = groupTasks[0];
+        const assignedIds = groupTasks.map(t => t.assigneeId);
+
+        document.getElementById('groupId').value = groupId;
+        document.getElementById('taskTitle').value = ft.title;
+        document.getElementById('taskCategory').value = ft.category;
+        
+        document.getElementById('taskReminder').value = ft.reminder || 'none';
+        if (ft.reminder === 'custom') { reminderInput.value = ft.reminderDate || ''; reminderInput.classList.remove('hidden'); } 
+        else { reminderInput.classList.add('hidden'); reminderInput.value = ''; }
+        
+        document.getElementById('taskStartDate').value = ft.startDate;
+        document.getElementById('taskEndDate').value = ft.endDate;
+        document.getElementById('taskNotes').value = ft.notes || '';
+        completedCheckbox.checked = ft.completed === true;
+        
+        cbGroup.innerHTML = window.collaborators.map(c => `
+          <label class="flex items-center space-x-2 text-xs p-1.5 rounded cursor-pointer font-semibold" style="background-color: ${c.bg}; color: ${c.text}">
+            <input type="checkbox" value="${c.id}" ${assignedIds.includes(c.id) ? 'checked' : ''} class="rounded border-slate-300"> <span class="truncate">${c.name}</span></label>`).join('');
+        titleEl.innerHTML = '<i class="fa-regular fa-pen-to-square text-blue-400"></i> Modifica Lavoro Cloud';
+        delBtn.classList.remove('hidden');
+      } else {
+        document.getElementById('groupId').value = '';
+        const dateVal = defaultDate || new Date().toISOString().split('T')[0];
+        document.getElementById('taskStartDate').value = dateVal; document.getElementById('taskEndDate').value = dateVal;
+        document.getElementById('taskReminder').value = 'none'; reminderInput.classList.add('hidden'); reminderInput.value = '';
+        completedCheckbox.checked = false;
+        
+        // Se c'è un utente loggato specifico, pre-seleziona lui nel form nuovo lavoro
+        const defaultAssignee = window.currentLoggedInUser && window.currentLoggedInUser !== 'admin' ? window.currentLoggedInUser : null;
+        cbGroup.innerHTML = window.collaborators.map((c, i) => {
+          const isChecked = defaultAssignee ? c.id === defaultAssignee : i === 0;
+          return `<label class="flex items-center space-x-2 text-xs p-1.5 rounded cursor-pointer font-semibold" style="background-color: ${c.bg}; color: ${c.text}">
+            <input type="checkbox" value="${c.id}" ${isChecked ? 'checked' : ''} class="rounded border-slate-300"> <span class="truncate">${c.name}</span></label>`;
+        }).join('');
+        titleEl.innerHTML = '<i class="fa-regular fa-calendar-plus text-blue-400"></i> Programma Nuovo Lavoro Cloud';
+        delBtn.classList.add('hidden');
+      }
+      document.getElementById('taskModal').classList.remove('hidden');
+    }
+    window.closeTaskModal = function() { document.getElementById('taskModal').classList.add('hidden'); }
+
+    window.saveTask = async function(e) {
+      e.preventDefault();
+      const exGroupId = document.getElementById('groupId').value;
+      const title = document.getElementById('taskTitle').value;
+      const category = document.getElementById('taskCategory').value;
+      const reminder = document.getElementById('taskReminder').value;
+      const start = document.getElementById('taskStartDate').value;
+      const end = document.getElementById('taskEndDate').value;
+      const notes = document.getElementById('taskNotes').value;
+      const completed = document.getElementById('taskCompleted').checked;
+      const reminderDate = reminder === 'custom' ? document.getElementById('taskCustomReminderDate').value : null;
+
+      const selectedIds = Array.from(document.querySelectorAll('#assigneesCheckboxGroup input:checked')).map(cb => cb.value);
+      if (!selectedIds.length) return alert('Seleziona almeno un collaboratore.');
+      if (reminder === 'custom' && !reminderDate) return alert('Seleziona la data per il promemoria.');
+
+      const groupId = exGroupId || 'g_' + Date.now();
+      const batch = writeBatch(db);
+
+      if (exGroupId) { window.tasks.filter(t => t.groupId === exGroupId).forEach(t => { batch.delete(doc(db, "tasks", t.id)); }); }
+      selectedIds.forEach((assigneeId, idx) => {
+        const tId = `t_${groupId}_${idx}`;
+        batch.set(doc(db, "tasks", tId), { groupId, title, assigneeId, category, reminder, reminderDate, startDate: start, endDate: end, notes, completed });
+      });
+      await batch.commit();
+      window.closeTaskModal();
+    }
+
+    window.deleteTaskGroup = async function() {
+      const gId = document.getElementById('groupId').value;
+      if (gId && confirm('Eliminare questo lavoro dal cloud per tutti i collaboratori assegnati?')) {
+        const batch = writeBatch(db);
+        window.tasks.filter(t => t.groupId === gId).forEach(t => { batch.delete(doc(db, "tasks", t.id)); });
+        await batch.commit();
+        window.closeTaskModal();
+      }
+    }
+
+    window.openCollaboratorsManageModal = function() { window.renderManageCollaboratorsList(); document.getElementById('collaboratorsManageModal').classList.remove('hidden'); }
+    window.closeCollaboratorsManageModal = function() { document.getElementById('collaboratorsManageModal').classList.add('hidden'); }
+    window.renderManageCollaboratorsList = function() {
+      document.getElementById('manageCollaboratorsList').innerHTML = window.collaborators.map(c => `
+        <div class="flex items-center space-x-2 bg-slate-50 p-2 border border-slate-200 rounded-lg">
+          <input type="color" value="${c.bg}" onchange="updateCollaboratorColor('${c.id}', this.value)" class="w-7 h-7 rounded border cursor-pointer">
+          <input type="text" value="${c.name}" onchange="updateCollaboratorName('${c.id}', this.value)" class="flex-1 text-xs p-1.5 border border-slate-300 rounded font-bold">
+          <input type="text" value="${c.role}" onchange="updateCollaboratorRole('${c.id}', this.value)" class="w-24 sm:w-28 text-xs p-1.5 border border-slate-300 rounded text-slate-600">
+          <button onclick="removeCollaborator('${c.id}')" class="text-red-500 hover:text-red-700 p-1.5"><i class="fa-solid fa-trash-can"></i></button>
+        </div>`).join('');
+    }
+    window.addNewCollaborator = async function() {
+      const name = document.getElementById('newCollabName').value.trim();
+      const role = document.getElementById('newCollabRole').value.trim() || 'Collaboratore';
+      const bg = document.getElementById('newCollabColor').value;
+      if (!name) return alert('Inserisci il nome.');
+      const newId = 'c_' + Date.now();
+      window.activeCollaboratorFilters.push(newId);
+      await setDoc(doc(db, "collaborators", newId), { name, role, bg, text: '#ffffff' });
+      document.getElementById('newCollabName').value = ''; document.getElementById('newCollabRole').value = '';
+    }
+    window.updateCollaboratorColor = async function(id, bg) { await setDoc(doc(db, "collaborators", id), { bg }, { merge: true }); }
+    window.updateCollaboratorName = async function(id, name) { if (name.trim()) await setDoc(doc(db, "collaborators", id), { name }, { merge: true }); }
+    window.updateCollaboratorRole = async function(id, role) { await setDoc(doc(db, "collaborators", id), { role }, { merge: true }); }
+    window.removeCollaborator = async function(id) {
+      if (window.collaborators.length <= 1) return alert('Deve rimanere almeno un collaboratore.');
+      if (confirm('Eliminare collaboratore dal database?')) await deleteDoc(doc(db, "collaborators", id));
+    }
+
+    window.openCategoriesManageModal = function() { window.renderManageCategoriesList(); document.getElementById('categoriesManageModal').classList.remove('hidden'); }
+    window.closeCategoriesManageModal = function() { document.getElementById('categoriesManageModal').classList.add('hidden'); }
+    window.renderManageCategoriesList = function() {
+      document.getElementById('manageCategoriesList').innerHTML = window.categories.map(cat => `
+        <div class="flex items-center space-x-2 bg-slate-50 p-2 border border-slate-200 rounded-lg">
+          <input type="text" value="${cat.name}" onchange="updateCategoryName('${cat.id}', this.value)" class="flex-1 text-xs p-1.5 border border-slate-300 rounded font-medium">
+          <button onclick="removeCategory('${cat.id}')" class="text-red-500 hover:text-red-700 p-1.5"><i class="fa-solid fa-trash-can"></i></button>
+        </div>`).join('');
+    }
+    window.addNewCategory = async function() {
+      const name = document.getElementById('newCategoryName').value.trim();
+      if (!name) return alert('Inserisci il nome.');
+      await setDoc(doc(db, "categories", 'cat_' + Date.now()), { name });
+      document.getElementById('newCategoryName').value = '';
+    }
+    window.updateCategoryName = async function(id, name) { if (name.trim()) await setDoc(doc(db, "categories", id), { name }, { merge: true }); }
+    window.removeCategory = async function(id) {
+      if (window.categories.length <= 1) return alert('Deve esserci almeno una tipologia.');
+      if (confirm('Eliminare questa tipologia?')) await deleteDoc(doc(db, "categories", id));
+    }
+  </script>
+</body>
+</html>
