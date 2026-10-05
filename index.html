@@ -2,12 +2,12 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>INTEGRA PROGETTI - Cloud Calendar</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
@@ -17,9 +17,18 @@
     .toast-exit { transform: translateX(100%); opacity: 0; transition: all 0.3s ease-in; }
     
     .task-checkbox:checked { background-color: #22c55e !important; border-color: #22c55e !important; }
+    
+    .dragging { opacity: 0.4; transform: scale(0.95); }
+    .drag-over { background-color: rgba(59, 130, 246, 0.1) !important; border: 2px dashed #3b82f6 !important; }
+
+    /* Fix altezza viewport mobile dinamica */
+    body {
+      height: 100dvh;
+      overflow: hidden;
+    }
   </style>
 </head>
-<body class="bg-slate-100 font-sans text-slate-800 antialiased h-screen flex flex-col overflow-hidden relative">
+<body class="bg-slate-100 font-sans text-slate-800 antialiased flex flex-col relative select-none">
 
   <!-- SCHERMATA DI ACCESSO (LOGIN PROFILI) -->
   <div id="login-overlay" class="fixed inset-0 bg-slate-900 z-[200] flex flex-col items-center justify-center p-4 transition-opacity duration-300">
@@ -37,7 +46,7 @@
   </div>
 
   <!-- Contenitore Notifiche Pop-up -->
-  <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 w-72 sm:w-80"></div>
+  <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 w-72 sm:w-80 pointer-events-none"></div>
 
   <!-- Header App Mobile & Desktop -->
   <header class="bg-slate-900 text-white px-3 sm:px-6 py-2.5 shadow-md flex justify-between items-center flex-shrink-0 z-10">
@@ -56,7 +65,6 @@
       <button onclick="openCollaboratorsManageModal()" class="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition items-center gap-1.5"><i class="fa-solid fa-user-gear"></i> Team</button>
       <button onclick="openCategoriesManageModal()" class="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition items-center gap-1.5"><i class="fa-solid fa-list-check"></i> Tipologie</button>
       <button onclick="openTaskModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-semibold transition shadow flex items-center gap-1.5 sm:gap-2 ml-1"><i class="fa-solid fa-plus"></i> <span class="hidden xs:inline">Nuovo</span></button>
-      <!-- Pulsante Cambio Utente / Esci -->
       <button onclick="logoutUser()" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-semibold transition shadow flex items-center gap-1.5 ml-1" title="Cambia Utente"><i class="fa-solid fa-right-from-bracket"></i> <span class="hidden sm:inline">Esci</span></button>
     </div>
   </header>
@@ -120,14 +128,11 @@
         </div>
       </div>
 
-      <!-- Grid Calendario -->
-      <div class="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 bg-slate-100">
+      <!-- Grid Calendario con Swipe Orizzontale -->
+      <div id="calendarSwipeWrapper" class="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 bg-slate-100">
         <div class="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col h-full min-h-[500px]">
-          <!-- Intestazione Dinamica Giorni -->
           <div id="calendarHeaderGrid" class="border-b border-slate-200 bg-slate-50 text-center font-bold text-[10px] sm:text-xs text-slate-500 py-2 uppercase tracking-wider flex-shrink-0">
           </div>
-          
-          <!-- Celle Giorni -->
           <div id="calendarDaysGrid" class="flex-1 auto-rows-fr gap-px bg-slate-200"></div>
         </div>
       </div>
@@ -230,7 +235,6 @@
     </div>
   </div>
 
-  <!-- FIREBASE & SCRIPT APPLICAZIONE -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
     import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
@@ -262,9 +266,39 @@
 
     signInAnonymously(auth).then(() => {
       initAppListeners();
+      initSwipeGesture();
     }).catch((error) => {
       console.error("Errore autenticazione cloud:", error);
     });
+
+    function initSwipeGesture() {
+      const wrapper = document.getElementById('calendarSwipeWrapper');
+      let touchStartX = 0; let touchStartY = 0; let touchEndX = 0; let touchEndY = 0;
+
+      wrapper.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+      }, {passive: true});
+
+      wrapper.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
+        handleSwipe();
+      }, {passive: true});
+
+      function handleSwipe() {
+        const diffX = touchEndX - touchStartX;
+        const diffY = touchEndY - touchStartY;
+        // Solo se lo swipe è orizzontale
+        if (Math.abs(diffX) > Math.abs(diffY)) {
+          if (diffX > 60) {
+            window.prevPeriod();
+          } else if (diffX < -60) {
+            window.nextPeriod();
+          }
+        }
+      }
+    }
 
     function initAppListeners() {
       let isFirstLoadCollabs = true;
@@ -279,15 +313,10 @@
           defaultCollabs.forEach(async c => { await setDoc(doc(db, "collaborators", c.id), c); });
         } else {
           window.collaborators = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
-          
           window.renderLoginScreen(); 
           window.renderCollaboratorsList();
           window.renderManageCollaboratorsList();
-          
-          // Se l'utente era già loggato in precedenza, applica i filtri corretti all'avvio
-          if (window.currentUserId) {
-            applyUserFilters(window.currentUserId, false);
-          }
+          if (window.currentUserId) applyUserFilters(window.currentUserId, false);
           window.renderCalendar();
         }
         isFirstLoadCollabs = false;
@@ -315,12 +344,10 @@
       });
     }
 
-    // --- GESTIONE LOGIN PROFILI & ADMIN ---
     window.renderLoginScreen = function() {
       const loginOverlay = document.getElementById('login-overlay');
       const container = document.getElementById('login-collaborators-list');
       
-      // Pulsante Admin in evidenza in cima
       let htmlContent = `
         <button onclick="selectUser('admin')" class="flex items-center justify-between p-3 rounded-xl border-2 border-slate-900 bg-slate-900 text-white hover:bg-slate-800 transition shadow-md w-full text-left">
           <div class="flex items-center space-x-3">
@@ -368,9 +395,7 @@
     window.selectUser = function(id) {
       window.currentUserId = id;
       localStorage.setItem('integra_current_user', id);
-      
       applyUserFilters(id, true);
-      
       const loginOverlay = document.getElementById('login-overlay');
       loginOverlay.classList.add('opacity-0', 'pointer-events-none');
       setTimeout(() => loginOverlay.classList.add('hidden'), 300);
@@ -379,13 +404,11 @@
     function applyUserFilters(userId, forceApply) {
       if (userId === 'admin') {
         document.getElementById('currentUserDisplay').textContent = "Accesso come: Amministratore";
-        // Admin vede tutti di default
         window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
       } else {
         const user = window.collaborators.find(c => c.id === userId);
         if (user) {
           document.getElementById('currentUserDisplay').textContent = "Accesso come: " + user.name;
-          // Collaboratore vede SOLO le sue attività di default
           window.activeCollaboratorFilters = [user.id];
         } else {
           window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
@@ -399,26 +422,23 @@
       window.currentUserId = null;
       localStorage.removeItem('integra_current_user');
       document.getElementById('currentUserDisplay').textContent = "Accesso in corso...";
-      
       const loginOverlay = document.getElementById('login-overlay');
       loginOverlay.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
     }
-    // --------------------------------
 
     window.toggleMobileSidebar = function() {
-      const sb = document.getElementById('sidebarFilters');
-      sb.classList.toggle('-translate-x-full');
+      document.getElementById('sidebarFilters').classList.toggle('-translate-x-full');
     }
 
     window.showToast = function(title, message, colorHex) {
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
-      toast.className = 'toast-enter bg-white border-l-4 rounded shadow-lg p-3 sm:p-4 flex items-start space-x-3 cursor-pointer text-xs sm:text-sm';
+      toast.className = 'toast-enter bg-white border-l-4 rounded shadow-lg p-3 sm:p-4 flex items-start space-x-3 text-xs sm:text-sm pointer-events-auto';
       toast.style.borderColor = colorHex || '#2563eb';
       toast.innerHTML = `
         <div class="bg-blue-50 rounded-full p-2 flex-shrink-0" style="color: ${colorHex || '#2563eb'}"><i class="fa-solid fa-bell text-sm"></i></div>
         <div class="flex-1 pt-0.5"><h4 class="font-bold text-slate-800 leading-tight">${title}</h4><p class="text-[11px] sm:text-xs text-slate-600 mt-0.5">${message}</p></div>
-        <button class="text-slate-400 hover:text-slate-600" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
+        <button class="text-slate-400 hover:text-slate-600 cursor-pointer" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
       `;
       container.appendChild(toast);
       requestAnimationFrame(() => { toast.classList.remove('toast-enter'); toast.classList.add('toast-enter-active'); });
@@ -427,14 +447,12 @@
 
     window.checkReminders = function() {
       if(!window.currentUserId) return;
-      
       const today = new Date().toISOString().split('T')[0];
       const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
       const tmrwStr = tmrw.toISOString().split('T')[0];
       
       window.tasks.forEach(t => {
         if (!t.reminder || t.reminder === 'none' || t.completed) return;
-        // Se non è admin, mostra i promemoria solo dei suoi task
         if (window.currentUserId !== 'admin' && t.assigneeId !== window.currentUserId) return;
 
         const collab = window.collaborators.find(c => c.id === t.assigneeId) || {name: 'Team', bg: '#2563eb'};
@@ -494,7 +512,6 @@
     }
     window.resetCollaboratorFilter = function() { window.activeCollaboratorFilters = window.collaborators.map(c => c.id); window.renderCollaboratorsList(); window.renderCalendar(); }
     
-    // Gestione Viste e Navigazione
     window.setView = function(v) {
       window.currentView = v;
       ['month', 'week', 'day'].forEach(view => {
@@ -598,6 +615,16 @@
         const dayCell = document.createElement('div');
         dayCell.className = `bg-white p-1.5 sm:p-2 ${minHeightClass} flex flex-col justify-start transition hover:bg-slate-50/80 group ${isToday ? 'bg-blue-50/20 ring-1 ring-blue-400' : ''}`;
         
+        // DRAG & DROP
+        dayCell.addEventListener('dragover', (e) => { e.preventDefault(); dayCell.classList.add('drag-over'); });
+        dayCell.addEventListener('dragleave', () => { dayCell.classList.remove('drag-over'); });
+        dayCell.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dayCell.classList.remove('drag-over');
+          const groupId = e.dataTransfer.getData('text/plain');
+          if (groupId) window.moveTaskGroupToDate(groupId, dateStr);
+        });
+
         let dayHeaderStr = iterDay;
         if (window.currentView === 'day') dayHeaderStr = `${d.toLocaleString('it-IT', {weekday:'long'})} ${iterDay}`;
 
@@ -608,16 +635,12 @@
           </div>
         `;
         const tasksContainer = document.createElement('div');
-        tasksContainer.className = 'space-y-1.5 overflow-y-auto flex-1 custom-scrollbar pr-1';
+        tasksContainer.className = 'space-y-1.5 overflow-y-auto flex-1 custom-scrollbar pr-1 pointer-events-auto';
 
         const dayTasks = window.tasks.filter(t => {
           let effectiveEndDate = t.endDate;
-          
-          if (t.completed && t.completionDate && t.completionDate > t.endDate) {
-             effectiveEndDate = t.completionDate;
-          } else if (!t.completed && todayStr > t.endDate) {
-             effectiveEndDate = todayStr;
-          }
+          if (t.completed && t.completionDate && t.completionDate > t.endDate) effectiveEndDate = t.completionDate;
+          else if (!t.completed && todayStr > t.endDate) effectiveEndDate = todayStr;
           
           return dateStr >= t.startDate && dateStr <= effectiveEndDate && window.activeCollaboratorFilters.includes(t.assigneeId) &&
                  (t.title.toLowerCase().includes(searchQuery) || (t.notes && t.notes.toLowerCase().includes(searchQuery)));
@@ -630,15 +653,21 @@
           const hasReminderIcon = t.reminder && t.reminder !== 'none' ? '<i class="fa-solid fa-bell text-[8px] opacity-70"></i> ' : '';
           
           const isOverdue = !t.completed && todayStr > t.endDate;
-          
           const borderStyle = isOverdue ? 'border-[2px] border-red-500 shadow-sm' : 'border border-black/10';
           const opacityStyle = t.completed ? 'opacity-50 saturate-50' : 'opacity-100';
 
           const taskCard = document.createElement('div');
-          taskCard.className = `text-[10px] sm:text-[11px] p-1.5 rounded shadow-sm hover:shadow-md transition flex flex-col justify-between leading-tight font-medium relative ${borderStyle} ${opacityStyle}`;
+          taskCard.className = `text-[10px] sm:text-[11px] p-1.5 rounded shadow-sm hover:shadow-md transition flex flex-col justify-between leading-tight font-medium relative cursor-grab active:cursor-grabbing ${borderStyle} ${opacityStyle}`;
           taskCard.style.backgroundColor = collab.bg; 
           taskCard.style.color = collab.text;
           
+          taskCard.setAttribute('draggable', 'true');
+          taskCard.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', t.groupId);
+            taskCard.classList.add('dragging');
+          });
+          taskCard.addEventListener('dragend', () => taskCard.classList.remove('dragging'));
+
           const overdueBadge = isOverdue ? '<span class="bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] ml-1 shadow-sm animate-pulse flex-shrink-0" title="Attività in ritardo"><i class="fa-solid fa-bell"></i></span>' : '';
 
           taskCard.innerHTML = `
@@ -663,16 +692,32 @@
       });
     }
 
+    window.moveTaskGroupToDate = async function(groupId, newTargetDateStr) {
+      const groupTasks = window.tasks.filter(t => t.groupId === groupId);
+      if (!groupTasks.length) return;
+
+      const ft = groupTasks[0];
+      const oldStart = new Date(ft.startDate);
+      const oldEnd = new Date(ft.endDate);
+      const durationDays = Math.round((oldEnd - oldStart) / (1000 * 60 * 60 * 24));
+
+      const newStart = new Date(newTargetDateStr);
+      const newEnd = new Date(newStart);
+      newEnd.setDate(newStart.getDate() + durationDays);
+
+      const newStartStr = newStart.toISOString().split('T')[0];
+      const newEndStr = newEnd.toISOString().split('T')[0];
+
+      const batch = writeBatch(db);
+      groupTasks.forEach(t => {
+        batch.set(doc(db, "tasks", t.id), { startDate: newStartStr, endDate: newEndStr }, { merge: true });
+      });
+      await batch.commit();
+    }
+
     window.toggleTaskCompletion = async function(taskId, isCurrentlyCompleted) {
       const todayStr = new Date().toISOString().split('T')[0];
-      
-      let updates = { completed: !isCurrentlyCompleted };
-      
-      if (!isCurrentlyCompleted) {
-        updates.completionDate = todayStr;
-      } else {
-        updates.completionDate = null;
-      }
+      let updates = { completed: !isCurrentlyCompleted, completionDate: !isCurrentlyCompleted ? todayStr : null };
 
       const t = window.tasks.find(x => x.id === taskId);
       if (t && t.groupId) {
@@ -728,13 +773,7 @@
         document.getElementById('taskStartDate').value = dateVal; document.getElementById('taskEndDate').value = dateVal;
         document.getElementById('taskReminder').value = 'none'; reminderInput.classList.add('hidden'); reminderInput.value = '';
         cbGroup.innerHTML = window.collaborators.map((c, i) => {
-          // Se è admin seleziona il primo, se è collaboratore seleziona se stesso
-          let isSelected = false;
-          if (window.currentUserId === 'admin') {
-            isSelected = i === 0;
-          } else {
-            isSelected = window.currentUserId === c.id;
-          }
+          let isSelected = window.currentUserId === 'admin' ? i === 0 : window.currentUserId === c.id;
           return `<label class="flex items-center space-x-2 text-xs p-1.5 rounded cursor-pointer font-semibold shadow-sm" style="background-color: ${c.bg}; color: ${c.text}">
             <input type="checkbox" value="${c.id}" ${isSelected ? 'checked' : ''} class="rounded border-slate-300"> <span class="truncate">${c.name}</span></label>`;
         }).join('');
@@ -768,11 +807,8 @@
       if (exGroupId) {
         const existingTasks = window.tasks.filter(t => t.groupId === exGroupId);
         if (existingTasks.length > 0) {
-           if (completed && !existingTasks[0].completed) {
-             completionDate = todayStr; 
-           } else if (completed && existingTasks[0].completed) {
-             completionDate = existingTasks[0].completionDate || todayStr; 
-           }
+           if (completed && !existingTasks[0].completed) completionDate = todayStr; 
+           else if (completed && existingTasks[0].completed) completionDate = existingTasks[0].completionDate || todayStr; 
         }
       } else {
         if (completed) completionDate = todayStr;
@@ -814,7 +850,7 @@
     window.addNewCollaborator = async function() {
       const name = document.getElementById('newCollabName').value.trim();
       const role = document.getElementById('newCollabRole').value.trim() || 'Collaboratore';
-      const bg = document.getElementById('newCollabColor').value;
+      const bg = document.getElementById('newCollabColor').value || '#3b82f6';
       if (!name) return alert('Inserisci il nome.');
       const newId = 'c_' + Date.now();
       window.activeCollaboratorFilters.push(newId);
