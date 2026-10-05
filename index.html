@@ -2,8 +2,17 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>INTEGRA PROGETTI - Cloud Calendar</title>
+  <!-- App installabile (PWA) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="INTEGRA">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
@@ -42,18 +51,25 @@
     #calendarSwipeWrapper, #calendarSwipeWrapper * { touch-action: pan-y; }
     #calendarSwipeWrapper { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 
-    /* Fix altezza viewport mobile dinamica */
-    body {
-      height: 100dvh;
-      overflow: hidden;
+    /* Schermo intero: il body non scorre, scorre solo il calendario (e le liste interne) */
+    :root {
+      box-sizing: border-box;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      background: #0f172a;
     }
+    html { height: 100%; }
+    body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+    #login-overlay { padding-top: calc(1rem + env(safe-area-inset-top, 0px)); padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+    #toast-container { bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+    .overflow-y-auto { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 antialiased flex flex-col relative select-none">
 
   <!-- SCHERMATA DI ACCESSO (LOGIN PROFILI) -->
   <div id="login-overlay" class="fixed inset-0 bg-slate-900 z-[200] flex flex-col items-center justify-center p-4 transition-opacity duration-300">
-    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md text-center flex flex-col max-h-[90vh]">
+    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md text-center flex flex-col max-h-[90dvh]">
       <div class="bg-blue-600 text-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-lg flex-shrink-0">
         <i class="fa-solid fa-compass-drafting"></i>
       </div>
@@ -158,7 +174,7 @@
 
   <!-- Modal Inserimento Lavoro -->
   <div id="taskModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-3 sm:p-4">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 flex flex-col max-h-[92dvh]">
       <div class="bg-slate-900 text-white px-4 sm:px-6 py-3.5 flex justify-between items-center flex-shrink-0">
         <h3 id="modalTitle" class="font-bold text-sm sm:text-base flex items-center gap-2"><i class="fa-regular fa-calendar-plus text-blue-400"></i> Programma Nuovo Lavoro</h3>
         <button onclick="closeTaskModal()" class="text-slate-400 hover:text-white text-base"><i class="fa-solid fa-xmark"></i></button>
@@ -254,7 +270,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+    import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
     const firebaseConfig = {
@@ -268,7 +284,7 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
     const auth = getAuth(app);
 
     window.collaborators = [];
@@ -1013,6 +1029,11 @@
     window.removeCategory = async function(id) {
       if (window.categories.length <= 1) return alert('Deve esserci almeno una tipologia.');
       if (confirm('Eliminare questa tipologia?')) await deleteDoc(doc(db, "categories", id));
+    }
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(err => console.warn('Service worker non registrato:', err)));
     }
   </script>
 </body>
