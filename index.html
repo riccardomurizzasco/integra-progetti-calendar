@@ -2,11 +2,13 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
+  <!-- Aggiunto viewport ottimizzato per evitare zoom accidentali -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>INTEGRA PROGETTI - Cloud Calendar</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
+    /* Scrollbar personalizzata */
     .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -21,11 +23,57 @@
     .dragging { opacity: 0.4; transform: scale(0.95); }
     .drag-over { background-color: rgba(59, 130, 246, 0.1) !important; border: 2px dashed #3b82f6 !important; }
 
-    /* Fix altezza viewport mobile dinamica */
+    /* Fix per lo scorrimento verticale mobile */
     body {
       height: 100dvh;
       overflow: hidden;
+      -webkit-overflow-scrolling: touch;
     }
+
+    #calendarSwipeWrapper {
+      overflow-y: auto;
+      overflow-x: hidden; /* Nasconde l'effetto scorrimento orizzontale fuori dallo schermo */
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y; /* Permette lo scorrimento verticale nativo */
+    }
+
+    /* Animazioni Scorrimento "Pagina di Libro" */
+    @keyframes slideOutLeft { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-30%); opacity: 0; } }
+    @keyframes slideInRight { from { transform: translateX(30%); opacity: 0Ecco il file `index.html` completo. 
+
+Ho riscritto la logica di scorrimento e impaginazione per risolvere definitivamente i due problemi:
+1. **Swipe a "Pagina di Libro":** Ora, trascinando il dito a destra o a sinistra sul calendario da mobile, l'intera schermata segue fluidamente il tuo dito (come la pagina di un libro). Se superi la soglia, l'animazione completa il cambio mese/settimana inserendo la nuova visualizzazione con un effetto a scorrimento laterale.
+2. **Scroll Verticale Perfetto:** Ho separato l'asse delle gesture (X per il cambio pagina, Y per lo scorrimento). Se il sistema capisce che stai scorrendo verso l'alto o verso il basso, disabilita l'animazione a libro e lascia scorrere fluidamente le attività verticali senza bloccarti, sfruttando lo scrolling nativo del telefono.
+
+Puoi copiare e incollare per intero questo codice nel tuo `index.html`:
+
+```html
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>INTEGRA PROGETTI - Cloud Calendar</title>
+  <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+  <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css)">
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .toast-enter { transform: translateX(100%); opacity: 0; }
+    .toast-enter-active { transform: translateX(0); opacity: 1; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+    .toast-exit { transform: translateX(100%); opacity: 0; transition: all 0.3s ease-in; }
+    
+    .task-checkbox:checked { background-color: #22c55e !important; border-color: #22c55e !important; }
+    
+    .dragging { opacity: 0.4; transform: scale(0.95); }
+    .drag-over { background-color: rgba(59, 130, 246, 0.1) !important; border: 2px dashed #3b82f6 !important; }
+
+    /* Fix per altezza viewport mobile e touch scrolling */
+    body { height: 100dvh; overflow: hidden; }
+    #calendarSwipeWrapper { touch-action: pan-y; } /* Permette scroll verticale nativo, previene zoom */
   </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 antialiased flex flex-col relative select-none">
@@ -49,7 +97,7 @@
   <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 w-72 sm:w-80 pointer-events-none"></div>
 
   <!-- Header App Mobile & Desktop -->
-  <header class="bg-slate-900 text-white px-3 sm:px-6 py-2.5 shadow-md flex justify-between items-center flex-shrink-0 z-10">
+  <header class="bg-slate-900 text-white px-3 sm:px-6 py-2.5 shadow-md flex justify-between items-center flex-shrink-0 z-10 relative">
     <div class="flex items-center space-x-2 sm:space-x-3">
       <div class="bg-blue-600 text-white p-1.5 sm:p-2 rounded-lg font-bold tracking-wider text-xs sm:text-sm flex items-center gap-1.5">
         <i class="fa-solid fa-compass-drafting text-base sm:text-lg"></i>
@@ -102,14 +150,14 @@
     </aside>
 
     <!-- Area Calendario -->
-    <main class="flex-1 flex flex-col bg-white overflow-hidden w-full">
-      <div class="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-stretch sm:items-center bg-slate-50 flex-shrink-0 gap-3 sm:gap-0">
+    <main class="flex-1 flex flex-col bg-white overflow-hidden w-full relative">
+      <div class="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-stretch sm:items-center bg-slate-50 flex-shrink-0 gap-3 sm:gap-0 z-10 relative">
         
         <!-- Navigazione Calendario -->
         <div class="flex items-center justify-between sm:justify-start space-x-2 sm:space-x-3 w-full sm:w-auto">
-          <button onclick="prevPeriod()" class="p-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-slate-600 transition shadow-sm"><i class="fa-solid fa-chevron-left text-xs"></i></button>
+          <button onclick="slideCalendar('prev')" class="p-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-slate-600 transition shadow-sm"><i class="fa-solid fa-chevron-left text-xs"></i></button>
           <h2 id="currentMonthYear" class="text-sm sm:text-base font-bold text-slate-800 min-w-[140px] sm:min-w-[180px] text-center uppercase tracking-tight">Caricamento...</h2>
-          <button onclick="nextPeriod()" class="p-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-slate-600 transition shadow-sm"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+          <button onclick="slideCalendar('next')" class="p-2 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-slate-600 transition shadow-sm"><i class="fa-solid fa-chevron-right text-xs"></i></button>
           <button onclick="goToToday()" class="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-xs font-bold rounded-lg text-slate-700 transition shadow-sm hidden xs:block">Oggi</button>
         </div>
         
@@ -128,12 +176,14 @@
         </div>
       </div>
 
-      <!-- Grid Calendario con Swipe Orizzontale -->
-      <div id="calendarSwipeWrapper" class="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 bg-slate-100">
-        <div class="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col h-full min-h-[500px]">
-          <div id="calendarHeaderGrid" class="border-b border-slate-200 bg-slate-50 text-center font-bold text-[10px] sm:text-xs text-slate-500 py-2 uppercase tracking-wider flex-shrink-0">
+      <!-- Wrapper per Scrolling Verticale e Swipe Orizzontale -->
+      <div id="calendarSwipeWrapper" class="flex-1 overflow-y-auto overflow-x-hidden relative custom-scrollbar p-2 sm:p-4 bg-slate-100">
+        <!-- Contenitore Animato per Effetto "Libro" -->
+        <div id="calendarSlideContainer" class="w-full min-h-full transition-transform duration-300">
+          <div class="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col min-h-[500px]">
+            <div id="calendarHeaderGrid" class="border-b border-slate-200 bg-slate-50 text-center font-bold text-[10px] sm:text-xs text-slate-500 py-2 uppercase tracking-wider flex-shrink-0"></div>
+            <div id="calendarDaysGrid" class="flex-1 auto-rows-fr gap-px bg-slate-200"></div>
           </div>
-          <div id="calendarDaysGrid" class="flex-1 auto-rows-fr gap-px bg-slate-200"></div>
         </div>
       </div>
     </main>
@@ -235,11 +285,13 @@
     </div>
   </div>
 
+  <!-- FIREBASE & SCRIPT APPLICAZIONE -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+    import { initializeApp } from "[https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js](https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js)";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "[https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js](https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js)";
+    import { getAuth, signInAnonymously } from "[https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js](https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js)";
 
+    // INSERISCI QUI LE TUE CHIAVI FIREBASE SE VUOI MANTENERE IL TUO DATABASE VECCHIO
     const firebaseConfig = {
       apiKey: "AIzaSyCQ8CqiqBOzlwh1sFnAsAfjdeZgrUqUVAE",
       authDomain: "integra-progetti.firebaseapp.com",
@@ -271,34 +323,122 @@
       console.error("Errore autenticazione cloud:", error);
     });
 
+    // --- GESTIONE SWIPE E SCROLL (PAGINA LIBRO) ---
     function initSwipeGesture() {
       const wrapper = document.getElementById('calendarSwipeWrapper');
-      let touchStartX = 0; let touchStartY = 0; let touchEndX = 0; let touchEndY = 0;
+      const slider = document.getElementById('calendarSlideContainer');
+      let startX = 0;
+      let startY = 0;
+      let currentX = 0;
+      let isDragging = false;
+      let isScrolling = false;
 
       wrapper.addEventListener('touchstart', (e) => {
-        touchStartX = e.changedTouches[0].screenX;
-        touchStartY = e.changedTouches[0].screenY;
-      }, {passive: true});
+        if (e.touches.length > 1) return; // Ignora multi-touch
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        isDragging = true;
+        isScrolling = false;
+        slider.style.transition = 'none'; // Segue il dito istantaneamente
+      }, { passive: true });
 
-      wrapper.addEventListener('touchend', (e) => {
-        touchEndX = e.changedTouches[0].screenX;
-        touchEndY = e.changedTouches[0].screenY;
-        handleSwipe();
-      }, {passive: true});
+      wrapper.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+        const deltaX = touchX - startX;
+        const deltaY = touchY - startY;
 
-      function handleSwipe() {
-        const diffX = touchEndX - touchStartX;
-        const diffY = touchEndY - touchStartY;
-        // Solo se lo swipe è orizzontale
-        if (Math.abs(diffX) > Math.abs(diffY)) {
-          if (diffX > 60) {
-            window.prevPeriod();
-          } else if (diffX < -60) {
-            window.nextPeriod();
+        // Determina se l'utente sta scorrendo verticalmente
+        if (!isScrolling) {
+          if (Math.abs(deltaY) > Math.abs(deltaX)) {
+            isScrolling = true; // È uno scroll verticale, lascia fare al browser
           }
         }
-      }
+
+        // Se sta scorrendo in verticale, interrompi lo swipe orizzontale
+        if (isScrolling) return;
+
+        // Se è uno swipe orizzontale, sposta la pagina
+        currentX = deltaX;
+        slider.style.transform = `translateX(${currentX}px)`;
+      }, { passive: true });
+
+      wrapper.addEventListener('touchend', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        
+        if (!isScrolling) {
+          const threshold = 60; // Soglia per cambiare pagina (pixel)
+          if (currentX > threshold) {
+            // Trascinato a destra -> Mese precedente
+            slider.style.transition = 'transform 0.2s ease-out';
+            slider.style.transform = `translateX(100%)`;
+            setTimeout(() => {
+               window.changeDateOnly('prev');
+               slider.style.transition = 'none';
+               slider.style.transform = `translateX(-100%)`; // Prepara per rientrare
+               void slider.offsetWidth; // Forza reflow
+               slider.style.transition = 'transform 0.3s ease-out';
+               slider.style.transform = `translateX(0)`;
+            }, 200);
+          } else if (currentX < -threshold) {
+            // Trascinato a sinistra -> Mese successivo
+            slider.style.transition = 'transform 0.2s ease-out';
+            slider.style.transform = `translateX(-100%)`;
+            setTimeout(() => {
+               window.changeDateOnly('next');
+               slider.style.transition = 'none';
+               slider.style.transform = `translateX(100%)`; // Prepara per rientrare
+               void slider.offsetWidth; // Forza reflow
+               slider.style.transition = 'transform 0.3s ease-out';
+               slider.style.transform = `translateX(0)`;
+            }, 200);
+          } else {
+            // Ritorno elastico se non supera la soglia
+            slider.style.transition = 'transform 0.3s ease-out';
+            slider.style.transform = `translateX(0)`;
+          }
+        } else {
+           slider.style.transform = `translateX(0)`;
+        }
+        currentX = 0;
+      });
     }
+
+    // Funzione interna per cambiare solo i dati (usata dallo swipe)
+    window.changeDateOnly = function(direction) {
+      if (direction === 'prev') {
+        if(window.currentView === 'month') window.currentDate.setMonth(window.currentDate.getMonth() - 1); 
+        else if(window.currentView === 'week') window.currentDate.setDate(window.currentDate.getDate() - 7);
+        else if(window.currentView === 'day') window.currentDate.setDate(window.currentDate.getDate() - 1);
+      } else {
+        if(window.currentView === 'month') window.currentDate.setMonth(window.currentDate.getMonth() + 1); 
+        else if(window.currentView === 'week') window.currentDate.setDate(window.currentDate.getDate() + 7);
+        else if(window.currentView === 'day') window.currentDate.setDate(window.currentDate.getDate() + 1);
+      }
+      window.renderCalendar();
+    }
+
+    // Funzione pubblica per i pulsanti (Header) con animazione coordinata
+    window.slideCalendar = function(direction) {
+      const slider = document.getElementById('calendarSlideContainer');
+      slider.style.transition = 'transform 0.3s ease-out';
+      slider.style.transform = `translateX(${direction === 'prev' ? '100%' : '-100%'})`;
+      
+      setTimeout(() => {
+         window.changeDateOnly(direction);
+         slider.style.transition = 'none';
+         slider.style.transform = `translateX(${direction === 'prev' ? '-100%' : '100%'})`;
+         void slider.offsetWidth; // Forza il browser ad applicare la posizione istantanea
+         slider.style.transition = 'transform 0.3s ease-out';
+         slider.style.transform = 'translateX(0)';
+      }, 300);
+    }
+    // Override delle vecchie funzioni di bottoni
+    window.prevPeriod = function() { window.slideCalendar('prev'); }
+    window.nextPeriod = function() { window.slideCalendar('next'); }
+    // ----------------------------------------------
 
     function initAppListeners() {
       let isFirstLoadCollabs = true;
@@ -313,10 +453,14 @@
           defaultCollabs.forEach(async c => { await setDoc(doc(db, "collaborators", c.id), c); });
         } else {
           window.collaborators = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+          
           window.renderLoginScreen(); 
           window.renderCollaboratorsList();
           window.renderManageCollaboratorsList();
-          if (window.currentUserId) applyUserFilters(window.currentUserId, false);
+          
+          if (window.currentUserId) {
+            applyUserFilters(window.currentUserId, false);
+          }
           window.renderCalendar();
         }
         isFirstLoadCollabs = false;
@@ -349,17 +493,16 @@
       const container = document.getElementById('login-collaborators-list');
       
       let htmlContent = `
-        <button onclick="selectUser('admin')" class="flex items-center justify-between p-3 rounded-xl border-2 border-slate-900 bg-slate-900 text-white hover:bg-slate-800 transition shadow-md w-full text-left">
+        <button onclick="selectUser('admin')" class="flex items-center justify-between p-3 rounded-xl border-2 border-slate-900 bg-slate-900 text-white hover:bg-slate-800 transition shadow-md w-full text-left mb-2">
           <div class="flex items-center space-x-3">
             <div class="bg-blue-600 text-white w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm"><i class="fa-solid fa-user-shield"></i></div>
             <div>
               <div class="font-bold text-sm sm:text-base">Amministratore (Admin)</div>
-              <div class="text-xs text-slate-300">Visualizza tutte le attività del team</div>
+              <div class="text-xs text-slate-300">Tutte le attività</div>
             </div>
           </div>
           <i class="fa-solid fa-chevron-right text-slate-400 mr-2"></i>
         </button>
-        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left pt-2 pb-1">Oppure seleziona il tuo profilo:</div>
       `;
 
       htmlContent += window.collaborators.map(c => `
@@ -378,13 +521,13 @@
         if (window.currentUserId === 'admin') {
           loginOverlay.classList.add('opacity-0', 'pointer-events-none');
           setTimeout(() => loginOverlay.classList.add('hidden'), 300);
-          document.getElementById('currentUserDisplay').textContent = "Accesso come: Amministratore";
+          document.getElementById('currentUserDisplay').textContent = "Accesso: Admin";
         } else {
           const userExists = window.collaborators.find(c => c.id === window.currentUserId);
           if (userExists) {
             loginOverlay.classList.add('opacity-0', 'pointer-events-none');
             setTimeout(() => loginOverlay.classList.add('hidden'), 300);
-            document.getElementById('currentUserDisplay').textContent = "Accesso come: " + userExists.name;
+            document.getElementById('currentUserDisplay').textContent = "Accesso: " + userExists.name;
           } else {
             window.logoutUser();
           }
@@ -403,12 +546,12 @@
 
     function applyUserFilters(userId, forceApply) {
       if (userId === 'admin') {
-        document.getElementById('currentUserDisplay').textContent = "Accesso come: Amministratore";
+        document.getElementById('currentUserDisplay').textContent = "Accesso: Admin";
         window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
       } else {
         const user = window.collaborators.find(c => c.id === userId);
         if (user) {
-          document.getElementById('currentUserDisplay').textContent = "Accesso come: " + user.name;
+          document.getElementById('currentUserDisplay').textContent = "Accesso: " + user.name;
           window.activeCollaboratorFilters = [user.id];
         } else {
           window.activeCollaboratorFilters = window.collaborators.map(c => c.id);
@@ -427,18 +570,19 @@
     }
 
     window.toggleMobileSidebar = function() {
-      document.getElementById('sidebarFilters').classList.toggle('-translate-x-full');
+      const sb = document.getElementById('sidebarFilters');
+      sb.classList.toggle('-translate-x-full');
     }
 
     window.showToast = function(title, message, colorHex) {
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
-      toast.className = 'toast-enter bg-white border-l-4 rounded shadow-lg p-3 sm:p-4 flex items-start space-x-3 text-xs sm:text-sm pointer-events-auto';
+      toast.className = 'toast-enter bg-white border-l-4 rounded shadow-lg p-3 sm:p-4 flex items-start space-x-3 cursor-pointer text-xs sm:text-sm pointer-events-auto';
       toast.style.borderColor = colorHex || '#2563eb';
       toast.innerHTML = `
         <div class="bg-blue-50 rounded-full p-2 flex-shrink-0" style="color: ${colorHex || '#2563eb'}"><i class="fa-solid fa-bell text-sm"></i></div>
         <div class="flex-1 pt-0.5"><h4 class="font-bold text-slate-800 leading-tight">${title}</h4><p class="text-[11px] sm:text-xs text-slate-600 mt-0.5">${message}</p></div>
-        <button class="text-slate-400 hover:text-slate-600 cursor-pointer" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
+        <button class="text-slate-400 hover:text-slate-600" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
       `;
       container.appendChild(toast);
       requestAnimationFrame(() => { toast.classList.remove('toast-enter'); toast.classList.add('toast-enter-active'); });
@@ -489,402 +633,4 @@
         const isChecked = window.activeCollaboratorFilters.includes(c.id);
         const taskCount = window.tasks.filter(t => t.assigneeId === c.id && !t.completed).length;
         return `
-          <div onclick="toggleCollaboratorFilter('${c.id}')" class="p-2.5 rounded-lg border transition cursor-pointer flex items-center justify-between shadow-sm hover:shadow ${isChecked ? 'opacity-100 ring-2 ring-slate-700' : 'opacity-40 bg-slate-100 border-slate-300'}" style="background-color: ${c.bg}; color: ${c.text}">
-            <div class="flex items-center space-x-2"><input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleCollaboratorFilter('${c.id}')" class="rounded text-slate-900 focus:ring-0 cursor-pointer">
-              <div><div class="text-xs font-bold">${c.name}</div><div class="text-[10px] opacity-90">${c.role}</div></div>
-            </div><span class="text-[11px] px-2 py-0.5 rounded-full font-bold bg-black/20">${taskCount}</span>
-          </div>`;
-      }).join('');
-    }
-
-    window.renderCategoriesList = function() {
-      document.getElementById('categoriesList').innerHTML = window.categories.map(cat => `
-        <div class="flex items-center justify-between p-1.5 rounded hover:bg-slate-50 border border-transparent">
-          <span class="truncate"><i class="fa-solid fa-tag text-slate-400 mr-2"></i>${cat.name}</span>
-          <span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono text-[10px]">${window.tasks.filter(t => t.category === cat.name && !t.completed).length}</span>
-        </div>`).join('');
-    }
-
-    window.toggleCollaboratorFilter = function(id) {
-      if (window.activeCollaboratorFilters.includes(id)) window.activeCollaboratorFilters = window.activeCollaboratorFilters.filter(item => item !== id);
-      else window.activeCollaboratorFilters.push(id);
-      window.renderCollaboratorsList(); window.renderCalendar();
-    }
-    window.resetCollaboratorFilter = function() { window.activeCollaboratorFilters = window.collaborators.map(c => c.id); window.renderCollaboratorsList(); window.renderCalendar(); }
-    
-    window.setView = function(v) {
-      window.currentView = v;
-      ['month', 'week', 'day'].forEach(view => {
-        const btn = document.getElementById('btn-view-' + view);
-        if(view === v) {
-          btn.classList.add('bg-white', 'shadow-sm', 'text-slate-800');
-          btn.classList.remove('text-slate-500', 'hover:text-slate-800');
-        } else {
-          btn.classList.remove('bg-white', 'shadow-sm', 'text-slate-800');
-          btn.classList.add('text-slate-500', 'hover:text-slate-800');
-        }
-      });
-      window.renderCalendar();
-    }
-
-    window.prevPeriod = function() { 
-      if(window.currentView === 'month') window.currentDate.setMonth(window.currentDate.getMonth() - 1); 
-      else if(window.currentView === 'week') window.currentDate.setDate(window.currentDate.getDate() - 7);
-      else if(window.currentView === 'day') window.currentDate.setDate(window.currentDate.getDate() - 1);
-      window.renderCalendar(); 
-    }
-    
-    window.nextPeriod = function() { 
-      if(window.currentView === 'month') window.currentDate.setMonth(window.currentDate.getMonth() + 1); 
-      else if(window.currentView === 'week') window.currentDate.setDate(window.currentDate.getDate() + 7);
-      else if(window.currentView === 'day') window.currentDate.setDate(window.currentDate.getDate() + 1);
-      window.renderCalendar(); 
-    }
-    
-    window.goToToday = function() { window.currentDate = new Date(); window.renderCalendar(); }
-
-    window.renderCalendar = function() {
-      const year = window.currentDate.getFullYear(); const month = window.currentDate.getMonth();
-      const todayDate = new Date();
-      const todayStr = todayDate.toISOString().split('T')[0];
-      
-      const gridContainer = document.getElementById('calendarDaysGrid');
-      const headerGrid = document.getElementById('calendarHeaderGrid');
-      gridContainer.innerHTML = '';
-      
-      let daysToRender = [];
-      const monthNames = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
-
-      if (window.currentView === 'month') {
-        document.getElementById('currentMonthYear').textContent = `${monthNames[month]} ${year}`;
-        headerGrid.className = "grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center font-bold text-[10px] sm:text-xs text-slate-500 py-2 uppercase tracking-wider flex-shrink-0";
-        headerGrid.innerHTML = `<div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div><div class="text-slate-400">Sab</div><div class="text-slate-400">Dom</div>`;
-        gridContainer.className = "grid grid-cols-7 flex-1 auto-rows-fr gap-px bg-slate-200";
-
-        const firstDay = new Date(year, month, 1).getDay();
-        const startingDay = firstDay === 0 ? 6 : firstDay - 1;
-        const totalDays = new Date(year, month + 1, 0).getDate();
-        const prevMonthLastDay = new Date(year, month, 0).getDate();
-        
-        for (let i = startingDay - 1; i >= 0; i--) {
-          gridContainer.innerHTML += `<div class="bg-slate-50 text-slate-300 p-1 min-h-[85px] sm:min-h-[120px] text-xs font-medium select-none border-b border-slate-100">${prevMonthLastDay - i}</div>`;
-        }
-        for (let day = 1; day <= totalDays; day++) daysToRender.push(new Date(year, month, day));
-
-      } else if (window.currentView === 'week') {
-        const dayOfWeek = window.currentDate.getDay();
-        const distanceToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
-        const startOfWeek = new Date(window.currentDate);
-        startOfWeek.setDate(window.currentDate.getDate() + distanceToMonday);
-        
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        
-        document.getElementById('currentMonthYear').textContent = `${startOfWeek.getDate()} ${monthNames[startOfWeek.getMonth()].substring(0,3)} - ${endOfWeek.getDate()} ${monthNames[endOfWeek.getMonth()].substring(0,3)} ${endOfWeek.getFullYear()}`;
-        
-        headerGrid.className = "grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center font-bold text-[10px] sm:text-xs text-slate-500 py-2 uppercase tracking-wider flex-shrink-0";
-        headerGrid.innerHTML = `<div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div><div class="text-slate-400">Sab</div><div class="text-slate-400">Dom</div>`;
-        gridContainer.className = "grid grid-cols-7 flex-1 auto-rows-fr gap-px bg-slate-200";
-
-        for (let i = 0; i < 7; i++) {
-          const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i);
-          daysToRender.push(d);
-        }
-
-      } else if (window.currentView === 'day') {
-        document.getElementById('currentMonthYear').textContent = `${window.currentDate.getDate()} ${monthNames[window.currentDate.getMonth()]} ${year}`;
-        const dayName = window.currentDate.toLocaleString('it-IT', {weekday:'long'});
-        
-        headerGrid.className = "grid grid-cols-1 border-b border-slate-200 bg-slate-50 text-center font-bold text-[10px] sm:text-xs text-slate-500 py-2 uppercase tracking-wider flex-shrink-0";
-        headerGrid.innerHTML = `<div>${dayName}</div>`;
-        gridContainer.className = "grid grid-cols-1 flex-1 auto-rows-fr gap-px bg-slate-200";
-        daysToRender.push(new Date(window.currentDate));
-      }
-
-      const searchQuery = document.getElementById('searchInput').value.toLowerCase();
-
-      daysToRender.forEach(d => {
-        const iterYear = d.getFullYear(); const iterMonth = d.getMonth(); const iterDay = d.getDate();
-        const dateStr = `${iterYear}-${String(iterMonth + 1).padStart(2, '0')}-${String(iterDay).padStart(2, '0')}`;
-        const isToday = todayDate.getFullYear() === iterYear && todayDate.getMonth() === iterMonth && todayDate.getDate() === iterDay;
-        
-        let minHeightClass = 'min-h-[85px] sm:min-h-[120px]';
-        if (window.currentView === 'week') minHeightClass = 'min-h-[250px] sm:min-h-[350px]';
-        if (window.currentView === 'day') minHeightClass = 'min-h-[400px] sm:min-h-[500px]';
-
-        const dayCell = document.createElement('div');
-        dayCell.className = `bg-white p-1.5 sm:p-2 ${minHeightClass} flex flex-col justify-start transition hover:bg-slate-50/80 group ${isToday ? 'bg-blue-50/20 ring-1 ring-blue-400' : ''}`;
-        
-        // DRAG & DROP
-        dayCell.addEventListener('dragover', (e) => { e.preventDefault(); dayCell.classList.add('drag-over'); });
-        dayCell.addEventListener('dragleave', () => { dayCell.classList.remove('drag-over'); });
-        dayCell.addEventListener('drop', (e) => {
-          e.preventDefault();
-          dayCell.classList.remove('drag-over');
-          const groupId = e.dataTransfer.getData('text/plain');
-          if (groupId) window.moveTaskGroupToDate(groupId, dateStr);
-        });
-
-        let dayHeaderStr = iterDay;
-        if (window.currentView === 'day') dayHeaderStr = `${d.toLocaleString('it-IT', {weekday:'long'})} ${iterDay}`;
-
-        dayCell.innerHTML = `
-          <div class="flex justify-between items-center mb-1.5 px-0.5 border-b border-slate-100 pb-1">
-            <span class="text-[11px] sm:text-xs font-bold ${isToday ? 'bg-blue-600 text-white px-2 py-0.5 rounded-full flex items-center justify-center' : 'text-slate-700 capitalize'}">${dayHeaderStr}</span>
-            <button onclick="openTaskModal('${dateStr}')" class="opacity-100 sm:opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 text-sm transition px-2"><i class="fa-solid fa-plus-circle"></i></button>
-          </div>
-        `;
-        const tasksContainer = document.createElement('div');
-        tasksContainer.className = 'space-y-1.5 overflow-y-auto flex-1 custom-scrollbar pr-1 pointer-events-auto';
-
-        const dayTasks = window.tasks.filter(t => {
-          let effectiveEndDate = t.endDate;
-          if (t.completed && t.completionDate && t.completionDate > t.endDate) effectiveEndDate = t.completionDate;
-          else if (!t.completed && todayStr > t.endDate) effectiveEndDate = todayStr;
-          
-          return dateStr >= t.startDate && dateStr <= effectiveEndDate && window.activeCollaboratorFilters.includes(t.assigneeId) &&
-                 (t.title.toLowerCase().includes(searchQuery) || (t.notes && t.notes.toLowerCase().includes(searchQuery)));
-        });
-
-        dayTasks.sort((a, b) => (a.completed === b.completed) ? 0 : a.completed ? 1 : -1);
-
-        dayTasks.forEach(t => {
-          const collab = window.collaborators.find(c => c.id === t.assigneeId) || { name: 'N/A', bg: '#64748b', text: '#fff' };
-          const hasReminderIcon = t.reminder && t.reminder !== 'none' ? '<i class="fa-solid fa-bell text-[8px] opacity-70"></i> ' : '';
-          
-          const isOverdue = !t.completed && todayStr > t.endDate;
-          const borderStyle = isOverdue ? 'border-[2px] border-red-500 shadow-sm' : 'border border-black/10';
-          const opacityStyle = t.completed ? 'opacity-50 saturate-50' : 'opacity-100';
-
-          const taskCard = document.createElement('div');
-          taskCard.className = `text-[10px] sm:text-[11px] p-1.5 rounded shadow-sm hover:shadow-md transition flex flex-col justify-between leading-tight font-medium relative cursor-grab active:cursor-grabbing ${borderStyle} ${opacityStyle}`;
-          taskCard.style.backgroundColor = collab.bg; 
-          taskCard.style.color = collab.text;
-          
-          taskCard.setAttribute('draggable', 'true');
-          taskCard.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('text/plain', t.groupId);
-            taskCard.classList.add('dragging');
-          });
-          taskCard.addEventListener('dragend', () => taskCard.classList.remove('dragging'));
-
-          const overdueBadge = isOverdue ? '<span class="bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] ml-1 shadow-sm animate-pulse flex-shrink-0" title="Attività in ritardo"><i class="fa-solid fa-bell"></i></span>' : '';
-
-          taskCard.innerHTML = `
-            <div class="flex items-start justify-between gap-1">
-              <div class="flex items-start gap-1.5 flex-1 min-w-0">
-                <input type="checkbox" ${t.completed ? 'checked' : ''} 
-                  onclick="event.stopPropagation(); toggleTaskCompletion('${t.id}', ${!!t.completed})" 
-                  class="task-checkbox mt-[1px] w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-white/50 bg-white/20 text-green-500 focus:ring-0 cursor-pointer flex-shrink-0"
-                  title="Segna come completata">
-                <div class="font-bold flex flex-wrap items-center gap-1 leading-snug cursor-pointer ${t.completed ? 'line-through' : ''}" onclick="openTaskModal(null, '${t.groupId}')">
-                  ${hasReminderIcon}<span class="break-words">${t.title}</span>${overdueBadge}
-                </div>
-              </div>
-            </div>
-            <div class="text-[8px] sm:text-[9px] opacity-90 truncate mt-1 flex justify-between items-center cursor-pointer" onclick="openTaskModal(null, '${t.groupId}')">
-              <span><i class="fa-regular fa-user mr-0.5"></i> ${collab.name.split(' ')[0]}</span>
-            </div>`;
-          tasksContainer.appendChild(taskCard);
-        });
-        dayCell.appendChild(tasksContainer);
-        gridContainer.appendChild(dayCell);
-      });
-    }
-
-    window.moveTaskGroupToDate = async function(groupId, newTargetDateStr) {
-      const groupTasks = window.tasks.filter(t => t.groupId === groupId);
-      if (!groupTasks.length) return;
-
-      const ft = groupTasks[0];
-      const oldStart = new Date(ft.startDate);
-      const oldEnd = new Date(ft.endDate);
-      const durationDays = Math.round((oldEnd - oldStart) / (1000 * 60 * 60 * 24));
-
-      const newStart = new Date(newTargetDateStr);
-      const newEnd = new Date(newStart);
-      newEnd.setDate(newStart.getDate() + durationDays);
-
-      const newStartStr = newStart.toISOString().split('T')[0];
-      const newEndStr = newEnd.toISOString().split('T')[0];
-
-      const batch = writeBatch(db);
-      groupTasks.forEach(t => {
-        batch.set(doc(db, "tasks", t.id), { startDate: newStartStr, endDate: newEndStr }, { merge: true });
-      });
-      await batch.commit();
-    }
-
-    window.toggleTaskCompletion = async function(taskId, isCurrentlyCompleted) {
-      const todayStr = new Date().toISOString().split('T')[0];
-      let updates = { completed: !isCurrentlyCompleted, completionDate: !isCurrentlyCompleted ? todayStr : null };
-
-      const t = window.tasks.find(x => x.id === taskId);
-      if (t && t.groupId) {
-        const batch = writeBatch(db);
-        window.tasks.filter(x => x.groupId === t.groupId).forEach(groupTask => {
-           batch.set(doc(db, "tasks", groupTask.id), updates, { merge: true });
-        });
-        await batch.commit();
-      }
-    }
-
-    window.openTaskModal = function(defaultDate = null, groupId = null) {
-      document.getElementById('taskForm').reset();
-      document.getElementById('taskCategory').innerHTML = window.categories.map(cat => `<option value="${cat.name}">${cat.name}</option>`).join('');
-      const cbGroup = document.getElementById('assigneesCheckboxGroup');
-      const titleEl = document.getElementById('modalTitle');
-      const delBtn = document.getElementById('deleteBtn');
-      const reminderInput = document.getElementById('taskCustomReminderDate');
-      const completedContainer = document.getElementById('completedContainer');
-      const completedCheckbox = document.getElementById('taskCompleted');
-
-      if (groupId) {
-        const groupTasks = window.tasks.filter(t => t.groupId === groupId);
-        if(!groupTasks.length) return;
-        const ft = groupTasks[0];
-        const assignedIds = groupTasks.map(t => t.assigneeId);
-
-        document.getElementById('groupId').value = groupId;
-        document.getElementById('taskTitle').value = ft.title;
-        document.getElementById('taskCategory').value = ft.category;
-        
-        completedContainer.classList.remove('hidden');
-        completedCheckbox.checked = !!ft.completed;
-
-        document.getElementById('taskReminder').value = ft.reminder || 'none';
-        if (ft.reminder === 'custom') { reminderInput.value = ft.reminderDate || ''; reminderInput.classList.remove('hidden'); } 
-        else { reminderInput.classList.add('hidden'); reminderInput.value = ''; }
-        
-        document.getElementById('taskStartDate').value = ft.startDate;
-        document.getElementById('taskEndDate').value = ft.endDate;
-        document.getElementById('taskNotes').value = ft.notes || '';
-        cbGroup.innerHTML = window.collaborators.map(c => `
-          <label class="flex items-center space-x-2 text-xs p-1.5 rounded cursor-pointer font-semibold shadow-sm" style="background-color: ${c.bg}; color: ${c.text}">
-            <input type="checkbox" value="${c.id}" ${assignedIds.includes(c.id) ? 'checked' : ''} class="rounded border-slate-300"> <span class="truncate">${c.name}</span></label>`).join('');
-        titleEl.innerHTML = '<i class="fa-regular fa-pen-to-square text-blue-400"></i> Modifica Lavoro Cloud';
-        delBtn.classList.remove('hidden');
-      } else {
-        document.getElementById('groupId').value = '';
-        completedContainer.classList.add('hidden');
-        completedCheckbox.checked = false;
-
-        const dateVal = defaultDate || new Date().toISOString().split('T')[0];
-        document.getElementById('taskStartDate').value = dateVal; document.getElementById('taskEndDate').value = dateVal;
-        document.getElementById('taskReminder').value = 'none'; reminderInput.classList.add('hidden'); reminderInput.value = '';
-        cbGroup.innerHTML = window.collaborators.map((c, i) => {
-          let isSelected = window.currentUserId === 'admin' ? i === 0 : window.currentUserId === c.id;
-          return `<label class="flex items-center space-x-2 text-xs p-1.5 rounded cursor-pointer font-semibold shadow-sm" style="background-color: ${c.bg}; color: ${c.text}">
-            <input type="checkbox" value="${c.id}" ${isSelected ? 'checked' : ''} class="rounded border-slate-300"> <span class="truncate">${c.name}</span></label>`;
-        }).join('');
-        titleEl.innerHTML = '<i class="fa-regular fa-calendar-plus text-blue-400"></i> Programma Nuovo Lavoro Cloud';
-        delBtn.classList.add('hidden');
-      }
-      document.getElementById('taskModal').classList.remove('hidden');
-    }
-    
-    window.closeTaskModal = function() { document.getElementById('taskModal').classList.add('hidden'); }
-
-    window.saveTask = async function(e) {
-      e.preventDefault();
-      const exGroupId = document.getElementById('groupId').value;
-      const title = document.getElementById('taskTitle').value;
-      const category = document.getElementById('taskCategory').value;
-      const reminder = document.getElementById('taskReminder').value;
-      const start = document.getElementById('taskStartDate').value;
-      let end = document.getElementById('taskEndDate').value;
-      const notes = document.getElementById('taskNotes').value;
-      const completed = document.getElementById('taskCompleted').checked;
-      const reminderDate = reminder === 'custom' ? document.getElementById('taskCustomReminderDate').value : null;
-
-      const selectedIds = Array.from(document.querySelectorAll('#assigneesCheckboxGroup input:checked')).map(cb => cb.value);
-      if (!selectedIds.length) return alert('Seleziona almeno un collaboratore.');
-      if (reminder === 'custom' && !reminderDate) return alert('Seleziona la data per il promemoria.');
-
-      const todayStr = new Date().toISOString().split('T')[0];
-      
-      let completionDate = null;
-      if (exGroupId) {
-        const existingTasks = window.tasks.filter(t => t.groupId === exGroupId);
-        if (existingTasks.length > 0) {
-           if (completed && !existingTasks[0].completed) completionDate = todayStr; 
-           else if (completed && existingTasks[0].completed) completionDate = existingTasks[0].completionDate || todayStr; 
-        }
-      } else {
-        if (completed) completionDate = todayStr;
-      }
-
-      const groupId = exGroupId || 'g_' + Date.now();
-      const batch = writeBatch(db);
-
-      if (exGroupId) { window.tasks.filter(t => t.groupId === exGroupId).forEach(t => { batch.delete(doc(db, "tasks", t.id)); }); }
-      selectedIds.forEach((assigneeId, idx) => {
-        const tId = `t_${groupId}_${idx}`;
-        batch.set(doc(db, "tasks", tId), { groupId, title, assigneeId, category, reminder, reminderDate, startDate: start, endDate: end, notes, completed, completionDate });
-      });
-      await batch.commit();
-      window.closeTaskModal();
-    }
-
-    window.deleteTaskGroup = async function() {
-      const gId = document.getElementById('groupId').value;
-      if (gId && confirm('Eliminare questo lavoro dal cloud per tutti i collaboratori assegnati?')) {
-        const batch = writeBatch(db);
-        window.tasks.filter(t => t.groupId === gId).forEach(t => { batch.delete(doc(db, "tasks", t.id)); });
-        await batch.commit();
-        window.closeTaskModal();
-      }
-    }
-
-    window.openCollaboratorsManageModal = function() { window.renderManageCollaboratorsList(); document.getElementById('collaboratorsManageModal').classList.remove('hidden'); }
-    window.closeCollaboratorsManageModal = function() { document.getElementById('collaboratorsManageModal').classList.add('hidden'); }
-    window.renderManageCollaboratorsList = function() {
-      document.getElementById('manageCollaboratorsList').innerHTML = window.collaborators.map(c => `
-        <div class="flex items-center space-x-2 bg-slate-50 p-2 border border-slate-200 rounded-lg">
-          <input type="color" value="${c.bg}" onchange="updateCollaboratorColor('${c.id}', this.value)" class="w-7 h-7 rounded border cursor-pointer shadow-sm">
-          <input type="text" value="${c.name}" onchange="updateCollaboratorName('${c.id}', this.value)" class="flex-1 text-xs p-1.5 border border-slate-300 rounded font-bold">
-          <input type="text" value="${c.role}" onchange="updateCollaboratorRole('${c.id}', this.value)" class="w-24 sm:w-28 text-xs p-1.5 border border-slate-300 rounded text-slate-600">
-          <button onclick="removeCollaborator('${c.id}')" class="text-red-500 hover:text-red-700 p-1.5"><i class="fa-solid fa-trash-can"></i></button>
-        </div>`).join('');
-    }
-    window.addNewCollaborator = async function() {
-      const name = document.getElementById('newCollabName').value.trim();
-      const role = document.getElementById('newCollabRole').value.trim() || 'Collaboratore';
-      const bg = document.getElementById('newCollabColor').value || '#3b82f6';
-      if (!name) return alert('Inserisci il nome.');
-      const newId = 'c_' + Date.now();
-      window.activeCollaboratorFilters.push(newId);
-      await setDoc(doc(db, "collaborators", newId), { name, role, bg, text: '#ffffff' });
-      document.getElementById('newCollabName').value = ''; document.getElementById('newCollabRole').value = '';
-    }
-    window.updateCollaboratorColor = async function(id, bg) { await setDoc(doc(db, "collaborators", id), { bg }, { merge: true }); }
-    window.updateCollaboratorName = async function(id, name) { if (name.trim()) await setDoc(doc(db, "collaborators", id), { name }, { merge: true }); }
-    window.updateCollaboratorRole = async function(id, role) { await setDoc(doc(db, "collaborators", id), { role }, { merge: true }); }
-    window.removeCollaborator = async function(id) {
-      if (window.collaborators.length <= 1) return alert('Deve rimanere almeno un collaboratore.');
-      if (confirm('Eliminare collaboratore dal database?')) await deleteDoc(doc(db, "collaborators", id));
-    }
-
-    window.openCategoriesManageModal = function() { window.renderManageCategoriesList(); document.getElementById('categoriesManageModal').classList.remove('hidden'); }
-    window.closeCategoriesManageModal = function() { document.getElementById('categoriesManageModal').classList.add('hidden'); }
-    window.renderManageCategoriesList = function() {
-      document.getElementById('manageCategoriesList').innerHTML = window.categories.map(cat => `
-        <div class="flex items-center space-x-2 bg-slate-50 p-2 border border-slate-200 rounded-lg">
-          <input type="text" value="${cat.name}" onchange="updateCategoryName('${cat.id}', this.value)" class="flex-1 text-xs p-1.5 border border-slate-300 rounded font-medium">
-          <button onclick="removeCategory('${cat.id}')" class="text-red-500 hover:text-red-700 p-1.5"><i class="fa-solid fa-trash-can"></i></button>
-        </div>`).join('');
-    }
-    window.addNewCategory = async function() {
-      const name = document.getElementById('newCategoryName').value.trim();
-      if (!name) return alert('Inserisci il nome.');
-      await setDoc(doc(db, "categories", 'cat_' + Date.now()), { name });
-      document.getElementById('newCategoryName').value = '';
-    }
-    window.updateCategoryName = async function(id, name) { if (name.trim()) await setDoc(doc(db, "categories", id), { name }, { merge: true }); }
-    window.removeCategory = async function(id) {
-      if (window.categories.length <= 1) return alert('Deve esserci almeno una tipologia.');
-      if (confirm('Eliminare questa tipologia?')) await deleteDoc(doc(db, "categories", id));
-    }
-  </script>
-</body>
-</html>
+          <div onclick="toggleCollaboratorFilter('${c.id}')" class="p-2.5 rounded-lg border transition cursor-pointer flex items-center justify-between shadow-sm hover:shadow ${isChecked ? 'opacity-100 ring-2 ring-slate-700' :
